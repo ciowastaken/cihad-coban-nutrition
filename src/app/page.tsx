@@ -1,65 +1,195 @@
-import Image from "next/image";
+import Link from "next/link";
+
+const features = [
+  {
+    title: "Kişiye özel plan",
+    description:
+      "Hedeflerine, günlük rutinine ve beslenme tercihlerine göre oluşturulan programlar.",
+  },
+  {
+    title: "Bilimsel kaynaklar",
+    description:
+      "Beslenme önerileri güvenilir veri kaynaklarıyla desteklenir.",
+  },
+  {
+    title: "Akıllı takip",
+    description:
+      "Kalori, makro, su ve kilo gelişimini tek panelden takip et.",
+  },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="min-h-screen bg-[#f7faf7] text-zinc-950">
+      <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-6 lg:px-10">
+        <Link href="/" className="flex items-center gap-3">
+          <div className="flex size-11 items-center justify-center rounded-2xl bg-emerald-600 font-bold text-white">
+            CC
+          </div>
+
+          <div>
+            <p className="font-semibold leading-none">Cihad Çoban</p>
+            <p className="mt-1 text-xs text-zinc-500">Nutrition</p>
+          </div>
+        </Link>
+
+        <nav className="hidden items-center gap-8 text-sm font-medium text-zinc-600 md:flex">
+          <a href="#features" className="transition hover:text-emerald-700">
+            Özellikler
+          </a>
+          <a href="#how-it-works" className="transition hover:text-emerald-700">
+            Nasıl çalışır?
+          </a>
+          <a href="#about" className="transition hover:text-emerald-700">
+            Hakkımızda
+          </a>
+        </nav>
+
+        <Link
+          href="/login"
+          className="rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold transition hover:border-emerald-600 hover:text-emerald-700"
+        >
+          Giriş yap
+        </Link>
+      </header>
+
+      <section className="mx-auto grid min-h-[calc(100vh-100px)] w-full max-w-7xl items-center gap-14 px-6 py-16 lg:grid-cols-2 lg:px-10">
+        <div>
+          <div className="mb-6 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
+            Yapay zekâ destekli kişisel beslenme
+          </div>
+
+          <h1 className="max-w-3xl text-5xl font-bold tracking-[-0.05em] sm:text-6xl lg:text-7xl">
+            Sana özel,
+            <span className="block text-emerald-600">bilimsel beslenme.</span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+
+          <p className="mt-7 max-w-xl text-lg leading-8 text-zinc-600">
+            Hedeflerini, günlük yaşamını ve yemek tercihlerini anlayan kişisel
+            beslenme asistanın. Planını oluştur, öğünlerini takip et ve
+            ilerlemeni tek yerden yönet.
           </p>
+
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/onboarding"
+              className="rounded-full bg-emerald-600 px-7 py-4 text-center font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700"
+            >
+              Ücretsiz planını oluştur
+            </Link>
+
+            <Link
+              href="/demo"
+              className="rounded-full border border-zinc-300 bg-white px-7 py-4 text-center font-semibold transition hover:border-zinc-400"
+            >
+              Nasıl çalıştığını gör
+            </Link>
+          </div>
+
+          <div className="mt-10 flex flex-wrap gap-x-7 gap-y-3 text-sm text-zinc-600">
+            <span>✓ Kişiselleştirilmiş plan</span>
+            <span>✓ Kalori ve makro takibi</span>
+            <span>✓ Türkçe ve İngilizce</span>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="relative">
+          <div className="absolute -left-10 -top-10 size-56 rounded-full bg-emerald-200/50 blur-3xl" />
+          <div className="absolute -bottom-10 -right-10 size-56 rounded-full bg-lime-200/50 blur-3xl" />
+
+          <div className="relative overflow-hidden rounded-[32px] border border-white/70 bg-white/80 p-6 shadow-2xl shadow-emerald-950/10 backdrop-blur">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-zinc-500">Bugünkü durumun</p>
+                <h2 className="mt-1 text-2xl font-bold">Günaydın, Cihad 👋</h2>
+              </div>
+
+              <div className="rounded-2xl bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700">
+                Hedefte
+              </div>
+            </div>
+
+            <div className="mt-7 rounded-3xl bg-zinc-950 p-6 text-white">
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-sm text-zinc-400">Günlük kalori</p>
+                  <p className="mt-2 text-4xl font-bold">
+                    1.640
+                    <span className="ml-2 text-base font-normal text-zinc-400">
+                      / 2.150 kcal
+                    </span>
+                  </p>
+                </div>
+
+                <p className="text-emerald-400">%76</p>
+              </div>
+
+              <div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-800">
+                <div className="h-full w-3/4 rounded-full bg-emerald-400" />
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-3 gap-3">
+              {[
+                ["Protein", "112 g", "145 g"],
+                ["Su", "2.1 L", "3 L"],
+                ["Adım", "7.820", "10.000"],
+              ].map(([label, value, target]) => (
+                <div
+                  key={label}
+                  className="rounded-2xl border border-zinc-200 bg-white p-4"
+                >
+                  <p className="text-xs text-zinc-500">{label}</p>
+                  <p className="mt-2 font-bold">{value}</p>
+                  <p className="mt-1 text-xs text-zinc-400">Hedef: {target}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 rounded-3xl bg-emerald-50 p-5">
+              <p className="text-sm font-semibold text-emerald-900">
+                AI önerin
+              </p>
+              <p className="mt-2 text-sm leading-6 text-emerald-900/70">
+                Bugün protein hedefinin biraz altındasın. Akşam öğününe yoğurt
+                veya yağsız bir protein kaynağı ekleyebilirsin.
+              </p>
+            </div>
+          </div>
         </div>
-      </main>
-    </div>
+      </section>
+
+      <section
+        id="features"
+        className="border-t border-zinc-200 bg-white px-6 py-24 lg:px-10"
+      >
+        <div className="mx-auto max-w-7xl">
+          <p className="text-sm font-semibold uppercase tracking-widest text-emerald-600">
+            Özellikler
+          </p>
+
+          <h2 className="mt-4 max-w-2xl text-4xl font-bold tracking-tight">
+            Beslenme yolculuğunda ihtiyacın olan her şey
+          </h2>
+
+          <div className="mt-12 grid gap-5 md:grid-cols-3">
+            {features.map((feature) => (
+              <article
+                key={feature.title}
+                className="rounded-3xl border border-zinc-200 bg-[#fafcf9] p-7"
+              >
+                <div className="mb-6 flex size-12 items-center justify-center rounded-2xl bg-emerald-100 text-xl">
+                  ✓
+                </div>
+                <h3 className="text-xl font-bold">{feature.title}</h3>
+                <p className="mt-3 leading-7 text-zinc-600">
+                  {feature.description}
+                </p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
