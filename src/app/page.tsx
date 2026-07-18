@@ -1,194 +1,420 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+
+import { SiteHeader } from "@/components/layout/SiteHeader";
 
 const features = [
+  [
+    "01",
+    "Gerçekten kişiye özel",
+    "Kilon, hedefin, öğün düzenin, bütçen ve tercihlerin birlikte değerlendirilir.",
+  ],
+  [
+    "02",
+    "Geçmişini hatırlar",
+    "Eski öğünlerin, programların ve kilo değişimin tek bir gelişim hikâyesinde kalır.",
+  ],
+  [
+    "03",
+    "Gününe uyum sağlar",
+    "Kahvaltı yapmadığın, dışarıda yediğin veya antrenmanı kaçırdığın günlerde planın esner.",
+  ],
+];
+
+const testimonials = [
   {
-    title: "Kişiye özel plan",
-    description:
-      "Hedeflerine, günlük rutinine ve beslenme tercihlerine göre oluşturulan programlar.",
+    initials: "EA",
+    name: "Ece A.",
+    context: "Örnek deneyim · kilo kontrolü",
+    quote:
+      "Kahvaltı yapmadığım günlerde planın beni zorlamaması takip etmeyi çok kolaylaştırdı.",
   },
   {
-    title: "Bilimsel kaynaklar",
-    description:
-      "Beslenme önerileri güvenilir veri kaynaklarıyla desteklenir.",
+    initials: "MK",
+    name: "Mert K.",
+    context: "Örnek deneyim · sporcu beslenmesi",
+    quote:
+      "Tekrar hesaplama yaptığımda hedef ve aktivite değişimime göre planın yenilenmesi en sevdiğim tarafı oldu.",
   },
   {
-    title: "Akıllı takip",
-    description:
-      "Kalori, makro, su ve kilo gelişimini tek panelden takip et.",
+    initials: "SD",
+    name: "Selin D.",
+    context: "Örnek deneyim · düzen oluşturma",
+    quote:
+      "Öğünleri ve kilo geçmişini aynı yerde görmek, neyi neden değiştirdiğimi anlamamı sağladı.",
   },
 ];
 
+const steps = [
+  [
+    "Profilini oluştur",
+    "Boy, kilo, hedef, aktivite ve beslenme düzenini birkaç dakikada ekle.",
+  ],
+  [
+    "Planını kişiselleştir",
+    "Bilgileri profilden getir veya bu program için güncel değerlerini yeniden gir.",
+  ],
+  [
+    "Takip et ve güncelle",
+    "Öğünlerini kaydet; sistem ilerlemene göre hedeflerini yeniden yorumlasın.",
+  ],
+];
+
+type ProfileResponse = {
+  profile?: {
+    full_name?: string | null;
+  } | null;
+  full_name?: string | null;
+};
+
+function getGreeting(hour: number): string {
+  if (hour >= 5 && hour < 12) {
+    return "Günaydın";
+  }
+
+  if (hour >= 12 && hour < 18) {
+    return "İyi günler";
+  }
+
+  return "İyi akşamlar";
+}
+
+function getFirstName(fullName?: string | null): string {
+  if (!fullName) {
+    return "";
+  }
+
+  return fullName.trim().split(/\s+/)[0] ?? "";
+}
+
 export default function Home() {
+  const [greeting, setGreeting] = useState("Merhaba");
+  const [firstName, setFirstName] = useState("");
+
+  useEffect(() => {
+    setGreeting(getGreeting(new Date().getHours()));
+
+    const loadProfile = async () => {
+      try {
+        const response = await fetch("/api/profile", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        // Kullanıcı giriş yapmamışsa isim göstermeden devam eder.
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as ProfileResponse;
+
+        const fullName =
+          data.profile?.full_name ??
+          data.full_name ??
+          null;
+
+        setFirstName(getFirstName(fullName));
+      } catch {
+        // Profil alınamazsa ana sayfa çalışmaya devam eder.
+        setFirstName("");
+      }
+    };
+
+    void loadProfile();
+  }, []);
+
+  const greetingText = firstName
+    ? `${greeting}, ${firstName} 👋`
+    : `${greeting} 👋`;
+
   return (
-    <main className="min-h-screen bg-[#f7faf7] text-zinc-950">
-      <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-6 lg:px-10">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="flex size-11 items-center justify-center rounded-2xl bg-emerald-600 font-bold text-white">
-            CC
+    <main className="home-page">
+      <SiteHeader variant="home" />
+
+      <section className="hero shell-wide">
+        <div className="hero-copy reveal">
+          <div className="eyebrow">
+            <span />
+            Yapay zekâ destekli beslenme koçu
           </div>
 
-          <div>
-            <p className="font-semibold leading-none">Cihad Çoban</p>
-            <p className="mt-1 text-xs text-zinc-500">Nutrition</p>
-          </div>
-        </Link>
-
-        <nav className="hidden items-center gap-8 text-sm font-medium text-zinc-600 md:flex">
-          <a href="#features" className="transition hover:text-emerald-700">
-            Özellikler
-          </a>
-          <a href="#how-it-works" className="transition hover:text-emerald-700">
-            Nasıl çalışır?
-          </a>
-          <a href="#about" className="transition hover:text-emerald-700">
-            Hakkımızda
-          </a>
-        </nav>
-
-        <Link
-          href="/login"
-          className="rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold transition hover:border-emerald-600 hover:text-emerald-700"
-        >
-          Giriş yap
-        </Link>
-      </header>
-
-      <section className="mx-auto grid min-h-[calc(100vh-100px)] w-full max-w-7xl items-center gap-14 px-6 py-16 lg:grid-cols-2 lg:px-10">
-        <div>
-          <div className="mb-6 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
-            Yapay zekâ destekli kişisel beslenme
-          </div>
-
-          <h1 className="max-w-3xl text-5xl font-bold tracking-[-0.05em] sm:text-6xl lg:text-7xl">
-            Sana özel,
-            <span className="block text-emerald-600">bilimsel beslenme.</span>
+          <h1>
+            Hedefini bilen,
+            <br />
+            <em>hayatına uyum sağlayan</em>
+            <br />
+            beslenme planı.
           </h1>
 
-          <p className="mt-7 max-w-xl text-lg leading-8 text-zinc-600">
-            Hedeflerini, günlük yaşamını ve yemek tercihlerini anlayan kişisel
-            beslenme asistanın. Planını oluştur, öğünlerini takip et ve
-            ilerlemeni tek yerden yönet.
+          <p>
+            Hazır listeler yerine seni tanıyan bir sistem. Öğünlerini, kilo
+            değişimini ve geçmiş programlarını takip et; planını gerçek
+            hayatına göre güncelle.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/onboarding"
-              className="rounded-full bg-emerald-600 px-7 py-4 text-center font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700"
-            >
-              Ücretsiz planını oluştur
+          <div className="hero-actions">
+            <Link href="/onboarding" className="button button-primary">
+              Planımı oluştur <span>→</span>
             </Link>
 
-            <Link
-              href="/demo"
-              className="rounded-full border border-zinc-300 bg-white px-7 py-4 text-center font-semibold transition hover:border-zinc-400"
-            >
+            <a href="#how-it-works" className="button button-secondary">
               Nasıl çalıştığını gör
-            </Link>
+            </a>
           </div>
 
-          <div className="mt-10 flex flex-wrap gap-x-7 gap-y-3 text-sm text-zinc-600">
-            <span>✓ Kişiselleştirilmiş plan</span>
-            <span>✓ Kalori ve makro takibi</span>
-            <span>✓ Türkçe ve İngilizce</span>
+          <div className="trust-row">
+            <span>✓ Zorunlu öğün yok</span>
+            <span>✓ Geçmiş kayıtları</span>
+            <span>✓ Esnek hedef takibi</span>
           </div>
         </div>
 
-        <div className="relative">
-          <div className="absolute -left-10 -top-10 size-56 rounded-full bg-emerald-200/50 blur-3xl" />
-          <div className="absolute -bottom-10 -right-10 size-56 rounded-full bg-lime-200/50 blur-3xl" />
+        <div className="hero-visual reveal reveal-delay">
+          <div className="orb orb-one" />
+          <div className="orb orb-two" />
 
-          <div className="relative overflow-hidden rounded-[32px] border border-white/70 bg-white/80 p-6 shadow-2xl shadow-emerald-950/10 backdrop-blur">
-            <div className="flex items-center justify-between">
+          <div className="dashboard-preview">
+            <div className="preview-top">
               <div>
-                <p className="text-sm text-zinc-500">Bugünkü durumun</p>
-                <h2 className="mt-1 text-2xl font-bold">Günaydın, Cihad 👋</h2>
+                <small>
+                  {new Intl.DateTimeFormat("tr-TR", {
+                    day: "numeric",
+                    month: "long",
+                    weekday: "long",
+                  }).format(new Date())}
+                </small>
+
+                <h2>{greetingText}</h2>
               </div>
 
-              <div className="rounded-2xl bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700">
-                Hedefte
+              <span className="status-pill">Hedefte</span>
+            </div>
+
+            <div className="calorie-panel">
+              <div>
+                <small>Günlük tüketim</small>
+
+                <strong>
+                  1.640 <i>/ 2.150 kcal</i>
+                </strong>
+              </div>
+
+              <b>%76</b>
+
+              <div className="progress">
+                <span style={{ width: "76%" }} />
               </div>
             </div>
 
-            <div className="mt-7 rounded-3xl bg-zinc-950 p-6 text-white">
-              <div className="flex items-end justify-between">
-                <div>
-                  <p className="text-sm text-zinc-400">Günlük kalori</p>
-                  <p className="mt-2 text-4xl font-bold">
-                    1.640
-                    <span className="ml-2 text-base font-normal text-zinc-400">
-                      / 2.150 kcal
-                    </span>
-                  </p>
-                </div>
-
-                <p className="text-emerald-400">%76</p>
+            <div className="metric-grid">
+              <div>
+                <small>Protein</small>
+                <strong>112 g</strong>
+                <span>145 g hedef</span>
               </div>
 
-              <div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-800">
-                <div className="h-full w-3/4 rounded-full bg-emerald-400" />
+              <div>
+                <small>Su</small>
+                <strong>2.1 L</strong>
+                <span>3 L hedef</span>
+              </div>
+
+              <div>
+                <small>Hedef</small>
+                <strong>-6.2 kg</strong>
+                <span>86 kg&apos;a kalan</span>
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-3 gap-3">
-              {[
-                ["Protein", "112 g", "145 g"],
-                ["Su", "2.1 L", "3 L"],
-                ["Adım", "7.820", "10.000"],
-              ].map(([label, value, target]) => (
-                <div
-                  key={label}
-                  className="rounded-2xl border border-zinc-200 bg-white p-4"
-                >
-                  <p className="text-xs text-zinc-500">{label}</p>
-                  <p className="mt-2 font-bold">{value}</p>
-                  <p className="mt-1 text-xs text-zinc-400">Hedef: {target}</p>
-                </div>
-              ))}
-            </div>
+            <div className="coach-card">
+              <span>✦</span>
 
-            <div className="mt-5 rounded-3xl bg-emerald-50 p-5">
-              <p className="text-sm font-semibold text-emerald-900">
-                AI önerin
-              </p>
-              <p className="mt-2 text-sm leading-6 text-emerald-900/70">
-                Bugün protein hedefinin biraz altındasın. Akşam öğününe yoğurt
-                veya yağsız bir protein kaynağı ekleyebilirsin.
-              </p>
+              <div>
+                <b>Bugünün koç notu</b>
+
+                <p>
+                  Kahvaltıyı atladın. Öğle öğününde protein ve lif dengesini
+                  biraz güçlendirelim.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="floating-card weight-card">
+            <small>Son 30 gün</small>
+            <b>-2.8 kg</b>
+            <span>İstikrarlı ilerleme ↗</span>
+          </div>
+
+          <div className="floating-card meal-card">
+            <span>🥗</span>
+
+            <div>
+              <b>Öğün kaydedildi</b>
+              <small>Tavuklu salata · 520 kcal</small>
             </div>
           </div>
         </div>
       </section>
 
-      <section
-        id="features"
-        className="border-t border-zinc-200 bg-white px-6 py-24 lg:px-10"
-      >
-        <div className="mx-auto max-w-7xl">
-          <p className="text-sm font-semibold uppercase tracking-widest text-emerald-600">
-            Özellikler
+      <section className="stats-strip">
+        <div className="shell-wide stats-inner">
+          <div>
+            <strong>Tek profil</strong>
+            <span>Tüm geçmişin bir arada</span>
+          </div>
+
+          <div>
+            <strong>Esnek öğünler</strong>
+            <span>Kahvaltısız günler dahil</span>
+          </div>
+
+          <div>
+            <strong>Canlı hedef</strong>
+            <span>Kilona göre güncellenir</span>
+          </div>
+
+          <div>
+            <strong>Akıllı plan</strong>
+            <span>Tercihlerine göre alternatifli</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" className="section shell-wide">
+        <div className="section-heading">
+          <div>
+            <div className="eyebrow">
+              <span />
+              Platform özellikleri
+            </div>
+
+            <h2>
+              Sadece kalori saymaz.
+              <br />
+              Seni ve düzenini anlar.
+            </h2>
+          </div>
+
+          <p>
+            Uygulama, tek seferlik hesaplama yerine zamanla gelişen bir
+            beslenme profili oluşturur.
           </p>
+        </div>
 
-          <h2 className="mt-4 max-w-2xl text-4xl font-bold tracking-tight">
-            Beslenme yolculuğunda ihtiyacın olan her şey
-          </h2>
+        <div className="feature-grid">
+          {features.map(([number, title, description]) => (
+            <article className="feature-card" key={title}>
+              <span>{number}</span>
+              <h3>{title}</h3>
+              <p>{description}</p>
+              <i>↗</i>
+            </article>
+          ))}
+        </div>
+      </section>
 
-          <div className="mt-12 grid gap-5 md:grid-cols-3">
-            {features.map((feature) => (
-              <article
-                key={feature.title}
-                className="rounded-3xl border border-zinc-200 bg-[#fafcf9] p-7"
-              >
-                <div className="mb-6 flex size-12 items-center justify-center rounded-2xl bg-emerald-100 text-xl">
-                  ✓
+      <section id="how-it-works" className="how-section">
+        <div className="shell-wide how-grid">
+          <div className="how-copy">
+            <div className="eyebrow light">
+              <span />
+              Nasıl çalışır?
+            </div>
+
+            <h2>Üç adımda sana ait bir sistem.</h2>
+
+            <p>
+              Profilindeki bilgileri kullanır, fakat her yeni programda güncel
+              durumunu onaylamanı ister.
+            </p>
+
+            <Link href="/onboarding" className="button button-light">
+              Hemen deneyimle →
+            </Link>
+          </div>
+
+          <div className="steps-list">
+            {steps.map(([title, description], index) => (
+              <div className="step-item" key={title}>
+                <span>0{index + 1}</span>
+
+                <div>
+                  <h3>{title}</h3>
+                  <p>{description}</p>
                 </div>
-                <h3 className="text-xl font-bold">{feature.title}</h3>
-                <p className="mt-3 leading-7 text-zinc-600">
-                  {feature.description}
-                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+
+      <section className="testimonial-section">
+        <div className="shell-wide">
+          <div className="section-heading testimonial-heading">
+            <div>
+              <div className="eyebrow"><span /> Örnek kullanıcı deneyimleri</div>
+              <h2>Günlük hayata uyum sağlayan küçük farklar.</h2>
+            </div>
+            <p>
+              Aşağıdaki kartlar arayüz gösterimi için hazırlanmış örnek deneyimlerdir;
+              gerçek kullanıcı yorumu veya doğrulanmış sonuç değildir.
+            </p>
+          </div>
+
+          <div className="testimonial-grid">
+            {testimonials.map((testimonial) => (
+              <article className="testimonial-card" key={testimonial.name}>
+                <div className="testimonial-rating" aria-label="5 yıldız">★★★★★</div>
+                <blockquote>“{testimonial.quote}”</blockquote>
+                <div className="testimonial-person">
+                  <span>{testimonial.initials}</span>
+                  <div>
+                    <b>{testimonial.name}</b>
+                    <small>{testimonial.context}</small>
+                  </div>
+                </div>
               </article>
             ))}
           </div>
         </div>
+      </section>
+
+      <section className="appointment-cta shell-wide">
+        <div>
+          <div className="eyebrow light"><span /> Birebir görüşme</div>
+          <h2>Programını birlikte değerlendirmek için randevu oluştur.</h2>
+          <p>
+            Uygun tarih ve saati seç; randevu talebin yönetim paneline ve
+            danışman e-postasına iletilsin.
+          </p>
+        </div>
+        <Link href="/appointment" className="button button-light">
+          Randevu talebi oluştur →
+        </Link>
+      </section>
+
+      <section className="section shell-wide final-cta">
+        <div>
+          <div className="eyebrow">
+            <span />
+            Bugün başla
+          </div>
+
+          <h2>
+            Beslenme planın hayatına uysun,
+            <br />
+            hayatın plana değil.
+          </h2>
+        </div>
+
+        <Link href="/onboarding" className="button button-primary">
+          Ücretsiz profil oluştur →
+        </Link>
       </section>
     </main>
   );
