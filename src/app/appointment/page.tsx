@@ -58,10 +58,19 @@ export default function AppointmentPage() {
       }
 
       formElement.reset();
+
+      if (json.emailSent === false) {
+        setSuccess("");
+        setError(
+          typeof json.warning === "string"
+            ? json.warning
+            : "Randevu kaydedildi fakat e-posta bildirimi gönderilemedi.",
+        );
+        return;
+      }
+
       setError("");
-      setSuccess(
-        "Randevu talebin alındı. Onay durumu e-posta üzerinden bildirilecek.",
-      );
+      setSuccess("Randevu talebin alındı ve bildirim e-postası gönderildi.");
     } catch (requestError) {
       console.error("Randevu gönderme hatası:", requestError);
       setSuccess("");
