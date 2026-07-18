@@ -24,3 +24,6 @@ Canlı ortamda Vercel değişkenini gerçek domainle değiştir.
 
 ## Not
 Supabase'in varsayılan e-posta servisi kısa sürede çok sayıda doğrulama/şifre yenileme e-postasında hız sınırına takılabilir. Bu durumda uygulama artık anlaşılır Türkçe hata gösterir. Ticari kullanımda özel SMTP bağlanması önerilir.
+
+## Vercel
+Resend tabanlı e-posta akışını yeniden devreye almak için production değişkenleri eklendikten sonra yeni bir Git commit'i ile deployment tetiklenmelidir.
