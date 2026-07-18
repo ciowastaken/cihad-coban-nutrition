@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/BrandLogo";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { SmartFoodSearch } from "@/features/foods/SmartFoodSearch";
@@ -22,6 +24,7 @@ import type {
 import type { SavedNutritionProfile } from "@/features/onboarding/types";
 
 const PROFILE_STORAGE_KEY = "cc-nutrition-profile";
+
 const mealOrder: MealType[] = [
   "breakfast",
   "lunch",
@@ -29,33 +32,131 @@ const mealOrder: MealType[] = [
   "snack",
 ];
 
+type ApiProfile = {
+  full_name?: string | null;
+};
+
+type ProfileApiResponse = {
+  profile?: ApiProfile | null;
+  full_name?: string | null;
+};
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+
+  if (hour >= 5 && hour < 12) {
+    return "Günaydın";
+  }
+
+  if (hour >= 12 && hour < 18) {
+    return "İyi günler";
+  }
+
+  return "İyi akşamlar";
+}
+
+function getFirstName(fullName?: string | null): string {
+  const cleanedName = fullName?.trim();
+
+  if (!cleanedName) {
+    return "";
+  }
+
+  return cleanedName.split(/\s+/)[0] ?? "";
+}
+
 export default function DashboardPage() {
+  const router = useRouter();
+
   const [profile, setProfile] =
     useState<SavedNutritionProfile | null>(null);
+  const [accountName, setAccountName] = useState("");
   const [meals, setMeals] = useState<MealEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] =
     useState<MealType>("breakfast");
+  const [skippedMeals, setSkippedMeals] = useState<MealType[]>([]);
 
   const today = getLocalDateKey();
+  const greeting = useMemo(() => getGreeting(), []);
 
   useEffect(() => {
-    const savedProfile = localStorage.getItem(PROFILE_STORAGE_KEY);
+    let cancelled = false;
 
-    if (savedProfile) {
+    async function prepareDashboard() {
       try {
-        setProfile(
-          JSON.parse(savedProfile) as SavedNutritionProfile,
+        const response = await fetch("/api/profile", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        if (response.status === 401 || response.status === 403) {
+          router.replace("/login?next=/dashboard");
+          return;
+        }
+
+        if (response.ok) {
+          const data = (await response.json()) as ProfileApiResponse;
+
+          const fullName =
+            data.profile?.full_name ??
+            data.full_name ??
+            null;
+
+          if (!cancelled) {
+            setAccountName(getFirstName(fullName));
+          }
+        }
+
+        const savedProfile = localStorage.getItem(
+          PROFILE_STORAGE_KEY,
         );
-      } catch {
-        localStorage.removeItem(PROFILE_STORAGE_KEY);
+
+        if (savedProfile && !cancelled) {
+          try {
+            setProfile(
+              JSON.parse(savedProfile) as SavedNutritionProfile,
+            );
+          } catch {
+            localStorage.removeItem(PROFILE_STORAGE_KEY);
+            setProfile(null);
+          }
+        }
+
+        if (!cancelled) {
+          setMeals(readMeals());
+
+          try {
+            const skipped = JSON.parse(
+              localStorage.getItem(
+                `cc-skipped-meals-${getLocalDateKey()}`,
+              ) || "[]",
+            ) as MealType[];
+
+            setSkippedMeals(
+              Array.isArray(skipped) ? skipped : [],
+            );
+          } catch {
+            setSkippedMeals([]);
+          }
+        }
+      } catch (error) {
+        console.error("Dashboard hazırlanamadı:", error);
+      } finally {
+        if (!cancelled) {
+          setLoaded(true);
+        }
       }
     }
 
-    setMeals(readMeals());
-    setLoaded(true);
-  }, []);
+    void prepareDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const todayMeals = useMemo(
     () => meals.filter((meal) => meal.date === today),
@@ -82,10 +183,9 @@ export default function DashboardPage() {
       id: crypto.randomUUID(),
       date: today,
       mealType: data.mealType,
-      foodName:
-        data.food.brand
-          ? `${data.food.name} — ${data.food.brand}`
-          : data.food.name,
+      foodName: data.food.brand
+        ? `${data.food.name} — ${data.food.brand}`
+        : data.food.name,
       portion: `${data.portionGrams} g`,
       calories: data.nutrition.calories,
       proteinGrams: data.nutrition.proteinGrams,
@@ -96,13 +196,28 @@ export default function DashboardPage() {
     };
 
     const nextMeals = [...meals, entry];
+
     setMeals(nextMeals);
     writeMeals(nextMeals);
     setSearchOpen(false);
   }
 
+  function toggleSkipped(mealType: MealType) {
+    const next = skippedMeals.includes(mealType)
+      ? skippedMeals.filter((item) => item !== mealType)
+      : [...skippedMeals, mealType];
+
+    setSkippedMeals(next);
+
+    localStorage.setItem(
+      `cc-skipped-meals-${today}`,
+      JSON.stringify(next),
+    );
+  }
+
   function deleteMeal(id: string) {
     const nextMeals = meals.filter((meal) => meal.id !== id);
+
     setMeals(nextMeals);
     writeMeals(nextMeals);
   }
@@ -120,13 +235,19 @@ export default function DashboardPage() {
       <main className="flex min-h-screen items-center justify-center bg-[#f7faf7] px-5">
         <div className="max-w-lg rounded-4xl border border-zinc-200 bg-white p-8 text-center">
           <h1 className="text-3xl font-bold">
-            Henüz planın bulunmuyor
+            Henüz beslenme profilin bulunmuyor
           </h1>
+
+          <p className="mt-3 text-zinc-600">
+            Hesabın açık. Kalori ve makro hedeflerini oluşturmak
+            için bilgilerini tamamla.
+          </p>
+
           <Link
             href="/onboarding"
             className="mt-7 inline-flex rounded-2xl bg-emerald-600 px-6 py-4 font-semibold text-white"
           >
-            Planımı oluştur
+            Bilgilerimi tamamla
           </Link>
         </div>
       </main>
@@ -134,25 +255,28 @@ export default function DashboardPage() {
   }
 
   const { formData, result } = profile;
+
+  const displayedName =
+    accountName ||
+    getFirstName(formData.name) ||
+    "Kullanıcı";
+
   const percentage = Math.min(
     100,
-    Math.round((totals.calories / result.targetCalories) * 100),
+    Math.round(
+      (totals.calories / result.targetCalories) * 100,
+    ),
   );
-  const remaining = result.targetCalories - totals.calories;
+
+  const remaining =
+    result.targetCalories - totals.calories;
 
   return (
     <main className="min-h-screen bg-[#f7faf7] px-5 py-7 text-zinc-950 sm:px-8">
       <div className="mx-auto max-w-7xl">
         <header className="flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-emerald-600 font-bold text-white">
-              CC
-            </div>
-            <div>
-              <p className="font-semibold">Cihad Çoban</p>
-              <p className="text-xs text-zinc-500">Nutrition</p>
-            </div>
-          </Link>
+          <BrandLogo subtitle={displayedName} />
+
           <Link
             href="/onboarding"
             className="rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold"
@@ -165,11 +289,14 @@ export default function DashboardPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">
             Bugünün özeti
           </p>
+
           <h1 className="mt-3 text-4xl font-bold sm:text-5xl">
-            Günaydın, {formData.name} 👋
+            {greeting}, {displayedName} 👋
           </h1>
+
           <p className="mt-4 text-lg text-zinc-600">
-            Yediğin besini ara; kalori ve makroları sistem doldursun.
+            Yediğin besini ara; kalori ve makroları sistem
+            doldursun.
           </p>
         </section>
 
@@ -180,13 +307,16 @@ export default function DashboardPage() {
                 <p className="text-sm text-zinc-400">
                   Günlük tüketim
                 </p>
+
                 <p className="mt-3 text-5xl font-bold">
                   {totals.calories}
+
                   <span className="ml-2 text-base font-normal text-zinc-400">
                     / {result.targetCalories} kcal
                   </span>
                 </p>
               </div>
+
               <span className="rounded-full bg-white/10 px-4 py-2 text-sm">
                 %{percentage}
               </span>
@@ -207,22 +337,34 @@ export default function DashboardPage() {
 
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
               {[
-                ["Protein", totals.proteinGrams, result.proteinGrams],
+                [
+                  "Protein",
+                  totals.proteinGrams,
+                  result.proteinGrams,
+                ],
                 [
                   "Karbonhidrat",
                   totals.carbohydrateGrams,
                   result.carbohydrateGrams,
                 ],
-                ["Yağ", totals.fatGrams, result.fatGrams],
+                [
+                  "Yağ",
+                  totals.fatGrams,
+                  result.fatGrams,
+                ],
               ].map(([label, consumed, target]) => (
                 <div
                   key={String(label)}
                   className="rounded-2xl bg-white/10 p-5"
                 >
-                  <p className="text-xs text-zinc-400">{label}</p>
+                  <p className="text-xs text-zinc-400">
+                    {label}
+                  </p>
+
                   <p className="mt-2 text-xl font-bold">
                     {consumed} g
                   </p>
+
                   <p className="mt-1 text-xs text-zinc-400">
                     Hedef: {target} g
                   </p>
@@ -235,9 +377,11 @@ export default function DashboardPage() {
             <p className="text-sm font-semibold text-emerald-800">
               Akıllı kayıt
             </p>
+
             <h2 className="mt-3 text-2xl font-bold">
               Makroları bilmen gerekmiyor
             </h2>
+
             <p className="mt-3 leading-7 text-emerald-900/75">
               Yemeğin adını yaz, doğru sonucu ve porsiyonu seç.
               Hesabı sistem yapar.
@@ -245,22 +389,28 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="mt-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+        <section className="dashboard-control mt-8">
+          <div className="dashboard-section-head">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">
-                Günlük öğünler
+              <p className="eyebrow">
+                <span />
+                Günlük kontrol merkezi
               </p>
-              <h2 className="mt-2 text-3xl font-bold">
-                Bugün ne yedin?
-              </h2>
+
+              <h2>Gününü kendi düzenine göre kaydet.</h2>
+
+              <p>
+                Kahvaltı yapmadıysan atla; yalnızca gerçekten
+                tükettiğin öğünleri ekle.
+              </p>
             </div>
+
             <button
               type="button"
               onClick={() => openSearch()}
-              className="rounded-2xl bg-emerald-600 px-6 py-3.5 font-semibold text-white"
+              className="button button-primary"
             >
-              + Yiyecek ara
+              + Yiyecek ekle
             </button>
           </div>
 
@@ -273,78 +423,141 @@ export default function DashboardPage() {
             />
           )}
 
-          <div className="mt-6 space-y-5">
+          <div className="daily-action-grid">
             {mealOrder.map((mealType) => {
               const matching = todayMeals.filter(
                 (meal) => meal.mealType === mealType,
               );
 
+              const skipped =
+                skippedMeals.includes(mealType);
+
               return (
                 <article
                   key={mealType}
-                  className="rounded-4xl border border-zinc-200 bg-white p-6 sm:p-8"
+                  className={`daily-action-card ${
+                    skipped ? "is-skipped" : ""
+                  }`}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="daily-card-top">
+                    <span className="daily-icon">
+                      {mealType === "breakfast"
+                        ? "☀"
+                        : mealType === "lunch"
+                          ? "◐"
+                          : mealType === "dinner"
+                            ? "☾"
+                            : "✦"}
+                    </span>
+
                     <div>
-                      <h3 className="text-xl font-bold">
-                        {mealTypeLabels[mealType]}
-                      </h3>
-                      <p className="mt-1 text-sm text-zinc-500">
-                        {matching.length
-                          ? `${matching.reduce(
-                              (sum, meal) =>
-                                sum + meal.calories,
-                              0,
-                            )} kcal`
-                          : "Henüz kayıt yok"}
+                      <h3>{mealTypeLabels[mealType]}</h3>
+
+                      <p>
+                        {skipped
+                          ? "Bugün atlandı"
+                          : matching.length
+                            ? `${matching.reduce(
+                                (sum, meal) =>
+                                  sum + meal.calories,
+                                0,
+                              )} kcal`
+                            : "Henüz kayıt yok"}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openSearch(mealType)}
-                      className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold"
-                    >
-                      Ekle
-                    </button>
                   </div>
 
-                  {matching.length > 0 && (
-                    <div className="mt-5 divide-y divide-zinc-100">
+                  {matching.length > 0 && !skipped && (
+                    <div className="compact-meal-list">
                       {matching.map((meal) => (
-                        <div
-                          key={meal.id}
-                          className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div>
-                            <p className="font-semibold">
-                              {meal.foodName}
-                            </p>
-                            <p className="mt-1 text-sm text-zinc-500">
-                              {meal.portion}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm">
-                            <span>
-                              <strong>{meal.calories} kcal</strong>
-                              {" · "}P {meal.proteinGrams} g
-                              {" · "}K {meal.carbohydrateGrams} g
-                              {" · "}Y {meal.fatGrams} g
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => deleteMeal(meal.id)}
-                              className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-600"
-                            >
-                              Sil
-                            </button>
-                          </div>
+                        <div key={meal.id}>
+                          <span>
+                            <b>{meal.foodName}</b>
+
+                            <small>
+                              {meal.portion} · {meal.calories} kcal
+                            </small>
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => deleteMeal(meal.id)}
+                          >
+                            Sil
+                          </button>
                         </div>
                       ))}
                     </div>
                   )}
+
+                  <div className="daily-card-actions">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (skipped) {
+                          toggleSkipped(mealType);
+                        }
+
+                        openSearch(mealType);
+                      }}
+                      disabled={skipped}
+                    >
+                      Yiyecek ekle
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleSkipped(mealType)}
+                      className={skipped ? "restore" : "skip"}
+                    >
+                      {skipped
+                        ? "Geri al"
+                        : "Bu öğünü atla"}
+                    </button>
+                  </div>
                 </article>
               );
             })}
+          </div>
+
+          <div className="quick-tools">
+            <Link href="/plans">
+              <span>✦</span>
+
+              <div>
+                <b>Yeni program hesapla</b>
+                <small>Güncel kilo ve hedefe göre</small>
+              </div>
+
+              <i>→</i>
+            </Link>
+
+            <Link href="/profile">
+              <span>↗</span>
+
+              <div>
+                <b>Kilomu güncelle</b>
+                <small>
+                  Gelişim geçmişine yeni kayıt ekle
+                </small>
+              </div>
+
+              <i>→</i>
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => openSearch("snack")}
+            >
+              <span>⌕</span>
+
+              <div>
+                <b>Hızlı yiyecek ara</b>
+                <small>Porsiyon ve makro hesapla</small>
+              </div>
+
+              <i>→</i>
+            </button>
           </div>
         </section>
       </div>
