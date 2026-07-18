@@ -25,11 +25,19 @@ async function sendAppointmentEmail(data: {
 }) {
   const apiKey = process.env.RESEND_API_KEY;
   const recipient = process.env.APPOINTMENT_NOTIFICATION_EMAIL;
-  const from = process.env.APPOINTMENT_FROM_EMAIL ?? "Randevu <onboarding@resend.dev>";
+  const from =
+    process.env.APPOINTMENT_FROM_EMAIL ??
+    "Cihad Çoban Nutrition <onboarding@resend.dev>";
 
-  if (!apiKey || !recipient) return;
+  if (!apiKey) {
+    throw new Error("RESEND_API_KEY tanımlı değil.");
+  }
 
-  await fetch("https://api.resend.com/emails", {
+  if (!recipient) {
+    throw new Error("APPOINTMENT_NOTIFICATION_EMAIL tanımlı değil.");
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -52,6 +60,11 @@ async function sendAppointmentEmail(data: {
       `,
     }),
   });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Resend hatası (${response.status}): ${detail}`);
+  }
 }
 
 export async function POST(request: Request) {
@@ -88,7 +101,9 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     const admin = createAdminClient();
 
     const { data: collision } = await admin
@@ -137,10 +152,25 @@ export async function POST(request: Request) {
         note,
       });
     } catch (mailError) {
-      console.error("Randevu e-postası gönderilemedi:", mailError);
+      const message =
+        mailError instanceof Error ? mailError.message : "Bilinmeyen e-posta hatası";
+      console.error("Randevu e-postası gönderilemedi:", message);
+
+      return NextResponse.json(
+        {
+          ok: true,
+          id: data.id,
+          emailSent: false,
+          warning: `Randevu kaydedildi fakat bildirim e-postası gönderilemedi: ${message}`,
+        },
+        { status: 201 },
+      );
     }
 
-    return NextResponse.json({ ok: true, id: data.id }, { status: 201 });
+    return NextResponse.json(
+      { ok: true, id: data.id, emailSent: true },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Randevu oluşturma hatası:", error);
     return NextResponse.json(
