@@ -60,6 +60,7 @@ export function AppNav() {
               <Link href="/#features">Özellikler</Link>
               <Link href="/#how-it-works">Nasıl çalışır?</Link>
               <Link href="/about" className={pathname === "/about" ? "active" : ""}>Hakkımızda</Link>
+              <Link href="/pricing" className={pathname === "/pricing" ? "active" : ""}>Üyelikler</Link>
               <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>Randevu</Link>
               <Link href="/dashboard" className={pathname.startsWith("/dashboard") ? "active" : ""}>Kontrol merkezi</Link>
             </>
@@ -82,6 +83,7 @@ export function AppNav() {
                 <>
                   <Link href="/profile" onClick={() => setOpen(false)}>Profili düzenle</Link>
                   <Link href="/plans" onClick={() => setOpen(false)}>Programlarım</Link>
+                  <Link href="/pricing" onClick={() => setOpen(false)}>Üyeliğim</Link>
                 </>
               )}
               <button type="button" onClick={logout} disabled={loading}>{loading ? "Çıkılıyor…" : "Çıkış yap"}</button>
