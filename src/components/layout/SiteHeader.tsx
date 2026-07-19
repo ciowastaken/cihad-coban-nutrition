@@ -11,13 +11,14 @@ type SiteHeaderProps = {
   variant?: "home" | "simple";
 };
 
-export function SiteHeader({ variant = "home" }: SiteHeaderProps) {
+export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
 
   const [ready, setReady] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("Hesabım");
   const [email, setEmail] = useState("");
@@ -36,6 +37,7 @@ export function SiteHeader({ variant = "home" }: SiteHeaderProps) {
 
       if (!user) {
         setAuthenticated(false);
+        setIsAdmin(false);
         setName("Hesabım");
         setEmail("");
         setReady(true);
@@ -47,12 +49,13 @@ export function SiteHeader({ variant = "home" }: SiteHeaderProps) {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("full_name")
+        .select("full_name,role")
         .eq("id", user.id)
         .maybeSingle();
 
       if (!active) return;
 
+      setIsAdmin(profile?.role === "admin");
       setName(
         profile?.full_name ||
           user.user_metadata?.full_name ||
@@ -71,10 +74,7 @@ export function SiteHeader({ variant = "home" }: SiteHeaderProps) {
     });
 
     function closeMenu(event: MouseEvent) {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(event.target as Node)
-      ) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setOpen(false);
       }
     }
@@ -93,6 +93,7 @@ export function SiteHeader({ variant = "home" }: SiteHeaderProps) {
     await createClient().auth.signOut();
     setOpen(false);
     setAuthenticated(false);
+    setIsAdmin(false);
     router.replace("/");
     router.refresh();
     setLoggingOut(false);
@@ -100,30 +101,17 @@ export function SiteHeader({ variant = "home" }: SiteHeaderProps) {
 
   return (
     <header className="site-header shell-wide shared-header">
-      <BrandLogo
-        href={authenticated ? "/dashboard" : "/"}
-        subtitle="Nutrition"
-      />
+      <BrandLogo href={authenticated ? "/dashboard" : "/"} subtitle="Nutrition" />
 
       <nav className="site-nav" aria-label="Ana menü">
-        {variant === "home" ? (
-          <>
-            <a href="#features">Özellikler</a>
-            <a href="#how-it-works">Nasıl çalışır?</a>
-            <Link href="/about">Hakkımızda</Link>
-          </>
-        ) : (
-          <Link href="/">Ana sayfa</Link>
-        )}
-
-        <Link
-          href="/appointment"
-          className={pathname === "/appointment" ? "active" : ""}
-        >
+        <Link href="/#features">Özellikler</Link>
+        <Link href="/#how-it-works">Nasıl çalışır?</Link>
+        <Link href="/about">Hakkımızda</Link>
+        <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>
           Randevu
         </Link>
-
         {authenticated && <Link href="/dashboard">Kontrol merkezi</Link>}
+        {isAdmin && <Link href="/admin" className={pathname === "/admin" ? "active" : ""}>Admin</Link>}
       </nav>
 
       <div className="header-actions">
@@ -158,6 +146,11 @@ export function SiteHeader({ variant = "home" }: SiteHeaderProps) {
                 <Link href="/profile" onClick={() => setOpen(false)}>
                   Profilimi düzenle
                 </Link>
+                {isAdmin && (
+                  <Link href="/admin" onClick={() => setOpen(false)}>
+                    Admin paneli
+                  </Link>
+                )}
                 <button type="button" onClick={logout} disabled={loggingOut}>
                   {loggingOut ? "Çıkılıyor…" : "Çıkış yap"}
                 </button>
