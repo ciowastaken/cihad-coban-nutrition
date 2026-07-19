@@ -11,6 +11,13 @@ type SiteHeaderProps = {
   variant?: "home" | "simple";
 };
 
+type RoleResponse = {
+  authenticated?: boolean;
+  role?: string | null;
+  fullName?: string | null;
+  email?: string;
+};
+
 export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -29,10 +36,16 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
     let active = true;
 
     async function syncUser() {
-      const { data: { user } } = await supabase.auth.getUser();
+      setReady(false);
+
+      const response = await fetch("/api/auth/role", {
+        cache: "no-store",
+        credentials: "same-origin",
+      }).catch(() => null);
+
       if (!active) return;
 
-      if (!user) {
+      if (!response?.ok) {
         setAuthenticated(false);
         setIsAdmin(false);
         setName("Hesabım");
@@ -41,25 +54,21 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
         return;
       }
 
-      setAuthenticated(true);
-      setEmail(user.email ?? "");
+      const data = (await response.json().catch(() => ({}))) as RoleResponse;
+      const signedIn = data.authenticated === true;
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("full_name,role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (!active) return;
-
-      setIsAdmin(profile?.role === "admin");
-      setName(profile?.full_name || user.user_metadata?.full_name || user.email?.split("@")[0] || "Hesabım");
+      setAuthenticated(signedIn);
+      setIsAdmin(signedIn && data.role === "admin");
+      setName(data.fullName || data.email?.split("@")[0] || "Hesabım");
+      setEmail(data.email || "");
       setReady(true);
     }
 
     void syncUser();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
       void syncUser();
     });
 
@@ -88,24 +97,31 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
 
   return (
     <header className="site-header shell-wide shared-header">
-      <BrandLogo href={isAdmin ? "/admin" : authenticated ? "/dashboard" : "/"} subtitle={isAdmin ? "Yönetim Paneli" : "Nutrition"} />
+      <BrandLogo
+        href={isAdmin ? "/admin" : authenticated ? "/dashboard" : "/"}
+        subtitle={isAdmin ? "Yönetim Paneli" : "Nutrition"}
+      />
 
-      <nav className="site-nav" aria-label="Ana menü">
-        {isAdmin ? (
-          <>
-            <Link href="/admin" className={pathname.startsWith("/admin") ? "active" : ""}>Yönetim merkezi</Link>
-            <Link href="/" className={pathname === "/" ? "active" : ""}>Siteyi görüntüle</Link>
-          </>
-        ) : (
-          <>
-            <Link href="/#features">Özellikler</Link>
-            <Link href="/#how-it-works">Nasıl çalışır?</Link>
-            <Link href="/about">Hakkımızda</Link>
-            <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>Randevu</Link>
-            {authenticated && <Link href="/dashboard">Kontrol merkezi</Link>}
-          </>
-        )}
-      </nav>
+      {ready ? (
+        <nav className="site-nav" aria-label="Ana menü">
+          {isAdmin ? (
+            <>
+              <Link href="/admin" className={pathname.startsWith("/admin") ? "active" : ""}>Yönetim merkezi</Link>
+              <Link href="/" className={pathname === "/" ? "active" : ""}>Siteyi görüntüle</Link>
+            </>
+          ) : (
+            <>
+              <Link href="/#features">Özellikler</Link>
+              <Link href="/#how-it-works">Nasıl çalışır?</Link>
+              <Link href="/about">Hakkımızda</Link>
+              <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>Randevu</Link>
+              {authenticated && <Link href="/dashboard">Kontrol merkezi</Link>}
+            </>
+          )}
+        </nav>
+      ) : (
+        <span className="header-nav-skeleton" aria-hidden="true" />
+      )}
 
       <div className="header-actions">
         {!ready ? (
@@ -140,7 +156,7 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
           <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="button button-secondary button-small">Giriş yap</Link>
         )}
 
-        {!isAdmin && <Link href="/appointment" className="button button-primary button-small header-appointment-button">Randevu al</Link>}
+        {ready && !isAdmin && <Link href="/appointment" className="button button-primary button-small header-appointment-button">Randevu al</Link>}
       </div>
     </header>
   );
