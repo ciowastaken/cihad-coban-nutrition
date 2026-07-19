@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { SiteFooter } from "@/components/layout/SiteFooter";
+import { SmoothNavigation } from "@/components/layout/SmoothNavigation";
 
 import "./globals.css";
 
@@ -22,8 +23,9 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <body className="bg-[#f7faf7] text-zinc-950 antialiased">
+        <SmoothNavigation />
         <div className="flex min-h-screen flex-col">
-          <div className="flex-1">{children}</div>
+          <div className="flex-1 page-enter">{children}</div>
           <SiteFooter />
         </div>
       </body>
