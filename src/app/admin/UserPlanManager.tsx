@@ -27,6 +27,11 @@ export function UserPlanManager({ userId, plans, onChange, onNotice, onError }: 
   const [status, setStatus] = useState<"active" | "archived">("active");
 
   async function createPlan() {
+    if (!title.trim()) {
+      onError("Program adı zorunlu.");
+      return;
+    }
+
     setBusy(true);
     onError("");
     onNotice("");
@@ -79,27 +84,58 @@ export function UserPlanManager({ userId, plans, onChange, onNotice, onError }: 
   return (
     <div className="admin-plans admin-plan-manager">
       <div className="admin-plan-manager-head">
-        <div><b>Programlar</b><span>{plans.length}</span></div>
-        <button className="admin-action-button primary" onClick={() => setOpen((value) => !value)}>
-          {open ? "Formu kapat" : "Program ata"}
+        <div className="admin-plan-title">
+          <div>
+            <b>Programlar</b>
+            <small>Kullanıcıya atanmış beslenme planları</small>
+          </div>
+          <span>{plans.length}</span>
+        </div>
+        <button className="admin-action-button primary admin-plan-toggle" onClick={() => setOpen((value) => !value)}>
+          {open ? "Vazgeç" : "+ Program ata"}
         </button>
       </div>
 
       {open && (
-        <div className="admin-inline-panel admin-plan-form">
-          <strong>Yeni program ata</strong>
-          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Program adı" maxLength={120} />
-          <textarea value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="Kısa açıklama (isteğe bağlı)" rows={3} maxLength={1200} />
-          <div className="admin-inline-fields">
-            <input type="number" min="500" max="10000" value={targetCalories} onChange={(event) => setTargetCalories(event.target.value)} placeholder="Kalori" />
-            <select value={status} onChange={(event) => setStatus(event.target.value as "active" | "archived")}>
-              <option value="active">Aktif</option>
-              <option value="archived">Arşivlenmiş</option>
-            </select>
+        <div className="admin-plan-form">
+          <div className="admin-plan-form-head">
+            <div>
+              <strong>Yeni program oluştur</strong>
+              <p>Temel bilgileri gir; kullanıcı programını kendi hesabında görecek.</p>
+            </div>
           </div>
-          <button className="admin-action-button primary" disabled={busy} onClick={() => void createPlan()}>
-            {busy ? "Atanıyor…" : "Programı ata"}
-          </button>
+
+          <div className="admin-plan-fields">
+            <label className="admin-plan-field admin-plan-field-wide">
+              <span>Program adı</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Örn. Yağ kaybı başlangıç programı" maxLength={120} />
+            </label>
+
+            <label className="admin-plan-field admin-plan-field-wide">
+              <span>Kısa açıklama</span>
+              <textarea value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="Programın amacı, süresi veya kısa not..." rows={4} maxLength={1200} />
+            </label>
+
+            <label className="admin-plan-field">
+              <span>Günlük kalori</span>
+              <input type="number" min="500" max="10000" value={targetCalories} onChange={(event) => setTargetCalories(event.target.value)} />
+            </label>
+
+            <label className="admin-plan-field">
+              <span>Durum</span>
+              <select value={status} onChange={(event) => setStatus(event.target.value as "active" | "archived")}>
+                <option value="active">Aktif</option>
+                <option value="archived">Arşivlenmiş</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="admin-plan-form-actions">
+            <button className="admin-action-button primary" disabled={busy} onClick={() => void createPlan()}>
+              {busy ? "Atanıyor…" : "Programı kullanıcıya ata"}
+            </button>
+            <button className="admin-action-button" disabled={busy} onClick={() => setOpen(false)}>İptal</button>
+          </div>
         </div>
       )}
 
@@ -113,7 +149,7 @@ export function UserPlanManager({ userId, plans, onChange, onNotice, onError }: 
             <button className="admin-action-button danger" disabled={busy} onClick={() => void deletePlan(plan)}>Sil</button>
           </div>
         ))}
-        {!plans.length && <em>Henüz program yok</em>}
+        {!plans.length && <div className="admin-plan-empty">Henüz program atanmadı.</div>}
       </div>
     </div>
   );
