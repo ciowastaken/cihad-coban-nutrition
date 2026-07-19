@@ -7,6 +7,21 @@ import { useEffect, useRef, useState } from "react";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { createClient } from "@/lib/supabase/client";
 
+type AccountResponse = {
+  authenticated?: boolean;
+  role?: string | null;
+  membershipTier?: "standard" | "pro" | "clinic" | null;
+  fullName?: string | null;
+  email?: string;
+};
+
+function accountLabel(isAdmin: boolean, tier?: AccountResponse["membershipTier"]) {
+  if (isAdmin) return "Admin";
+  if (tier === "clinic") return "Klinik";
+  if (tier === "pro") return "PRO";
+  return "Standart";
+}
+
 export function AppNav() {
   const pathname = usePathname();
   const router = useRouter();
@@ -15,29 +30,29 @@ export function AppNav() {
   const [name, setName] = useState("Hesabım");
   const [email, setEmail] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [membershipTier, setMembershipTier] = useState<AccountResponse["membershipTier"]>("standard");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const supabase = createClient();
-
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return;
-      setEmail(data.user.email ?? "");
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("full_name,role")
-        .eq("id", data.user.id)
-        .single();
-      setName(profile?.full_name || data.user.user_metadata?.full_name || "Hesabım");
-      setIsAdmin(profile?.role === "admin");
-    });
+    let active = true;
+    fetch("/api/auth/role", { cache: "no-store", credentials: "same-origin" })
+      .then((response) => response.ok ? response.json() : {})
+      .then((data: AccountResponse) => {
+        if (!active || !data.authenticated) return;
+        setName(data.fullName || data.email?.split("@")[0] || "Hesabım");
+        setEmail(data.email || "");
+        setIsAdmin(data.role === "admin");
+        setMembershipTier(data.membershipTier || "standard");
+      });
 
     const close = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) setOpen(false);
     };
-
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    return () => {
+      active = false;
+      document.removeEventListener("mousedown", close);
+    };
   }, []);
 
   async function logout() {
@@ -71,7 +86,7 @@ export function AppNav() {
           {!isAdmin && <Link href="/onboarding" className="button button-primary button-small nav-new-plan">Yeni hesaplama</Link>}
           <button type="button" className="account-trigger" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
             <span className="account-avatar">{name.slice(0, 1).toUpperCase()}</span>
-            <span className="account-copy"><b>{name}</b><small>{email || "Üye hesabı"}</small></span>
+            <span className="account-copy"><b>{name}</b><small>{accountLabel(isAdmin, membershipTier)} · {email || "Üye hesabı"}</small></span>
             <span>⌄</span>
           </button>
 
@@ -83,7 +98,7 @@ export function AppNav() {
                 <>
                   <Link href="/profile" onClick={() => setOpen(false)}>Profili düzenle</Link>
                   <Link href="/plans" onClick={() => setOpen(false)}>Programlarım</Link>
-                  <Link href="/pricing" onClick={() => setOpen(false)}>Üyeliğim</Link>
+                  <Link href="/pricing" onClick={() => setOpen(false)}>Üyeliğim: {accountLabel(false, membershipTier)}</Link>
                 </>
               )}
               <button type="button" onClick={logout} disabled={loading}>{loading ? "Çıkılıyor…" : "Çıkış yap"}</button>
