@@ -30,6 +30,16 @@ type Profile = {
   } | null;
 };
 
+type PlansResponse = {
+  plans?: Plan[];
+};
+
+type ProfileResponse = {
+  profile?: Profile | null;
+  full_name?: string | null;
+  nutrition_result?: Profile["nutrition_result"];
+};
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -114,13 +124,29 @@ export function PlanExportCenter() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/plans", { cache: "no-store", credentials: "include" }).then((r) => r.ok ? r.json() : { plans: [] }),
-      fetch("/api/profile", { cache: "no-store", credentials: "include" }).then((r) => r.ok ? r.json() : {}),
-    ]).then(([planData, profileData]) => {
-      setPlans(planData.plans || []);
-      setProfile(profileData.profile || profileData || null);
-    }).finally(() => setLoading(false));
+    async function loadData() {
+      try {
+        const [plansResponse, profileResponse] = await Promise.all([
+          fetch("/api/plans", { cache: "no-store", credentials: "include" }),
+          fetch("/api/profile", { cache: "no-store", credentials: "include" }),
+        ]);
+
+        const planData: PlansResponse = plansResponse.ok
+          ? await plansResponse.json()
+          : { plans: [] };
+
+        const profileData: ProfileResponse = profileResponse.ok
+          ? await profileResponse.json()
+          : {};
+
+        setPlans(planData.plans ?? []);
+        setProfile(profileData.profile ?? profileData ?? null);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadData();
   }, []);
 
   const nutrition = profile?.nutrition_result;
