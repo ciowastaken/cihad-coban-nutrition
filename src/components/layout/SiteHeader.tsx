@@ -29,10 +29,7 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
     let active = true;
 
     async function syncUser() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
+      const { data: { user } } = await supabase.auth.getUser();
       if (!active) return;
 
       if (!user) {
@@ -56,31 +53,21 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
       if (!active) return;
 
       setIsAdmin(profile?.role === "admin");
-      setName(
-        profile?.full_name ||
-          user.user_metadata?.full_name ||
-          user.email?.split("@")[0] ||
-          "Hesabım",
-      );
+      setName(profile?.full_name || user.user_metadata?.full_name || user.email?.split("@")[0] || "Hesabım");
       setReady(true);
     }
 
     void syncUser();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       void syncUser();
     });
 
     function closeMenu(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setOpen(false);
     }
 
     document.addEventListener("mousedown", closeMenu);
-
     return () => {
       active = false;
       subscription.unsubscribe();
@@ -101,17 +88,23 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
 
   return (
     <header className="site-header shell-wide shared-header">
-      <BrandLogo href={authenticated ? "/dashboard" : "/"} subtitle="Nutrition" />
+      <BrandLogo href={isAdmin ? "/admin" : authenticated ? "/dashboard" : "/"} subtitle={isAdmin ? "Yönetim Paneli" : "Nutrition"} />
 
       <nav className="site-nav" aria-label="Ana menü">
-        <Link href="/#features">Özellikler</Link>
-        <Link href="/#how-it-works">Nasıl çalışır?</Link>
-        <Link href="/about">Hakkımızda</Link>
-        <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>
-          Randevu
-        </Link>
-        {authenticated && <Link href="/dashboard">Kontrol merkezi</Link>}
-        {isAdmin && <Link href="/admin" className={pathname === "/admin" ? "active" : ""}>Admin</Link>}
+        {isAdmin ? (
+          <>
+            <Link href="/admin" className={pathname.startsWith("/admin") ? "active" : ""}>Yönetim merkezi</Link>
+            <Link href="/" className={pathname === "/" ? "active" : ""}>Siteyi görüntüle</Link>
+          </>
+        ) : (
+          <>
+            <Link href="/#features">Özellikler</Link>
+            <Link href="/#how-it-works">Nasıl çalışır?</Link>
+            <Link href="/about">Hakkımızda</Link>
+            <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>Randevu</Link>
+            {authenticated && <Link href="/dashboard">Kontrol merkezi</Link>}
+          </>
+        )}
       </nav>
 
       <div className="header-actions">
@@ -119,53 +112,35 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
           <span className="header-auth-skeleton" aria-hidden="true" />
         ) : authenticated ? (
           <div className="public-account" ref={menuRef}>
-            <button
-              type="button"
-              className="public-account-trigger"
-              onClick={() => setOpen((value) => !value)}
-              aria-expanded={open}
-            >
-              <span className="public-account-avatar">
-                {name.slice(0, 1).toLocaleUpperCase("tr-TR")}
-              </span>
-              <span className="public-account-copy">
-                <b>{name}</b>
-                <small>{email || "Üye hesabı"}</small>
-              </span>
+            <button type="button" className="public-account-trigger" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+              <span className="public-account-avatar">{name.slice(0, 1).toLocaleUpperCase("tr-TR")}</span>
+              <span className="public-account-copy"><b>{name}</b><small>{email || "Üye hesabı"}</small></span>
               <span className="account-chevron">⌄</span>
             </button>
 
             {open && (
               <div className="public-account-menu">
-                <Link href="/dashboard" onClick={() => setOpen(false)}>
-                  Kontrol merkezi
-                </Link>
-                <Link href="/plans" onClick={() => setOpen(false)}>
-                  Programlarım
-                </Link>
-                <Link href="/profile" onClick={() => setOpen(false)}>
-                  Profilimi düzenle
-                </Link>
-                {isAdmin && (
-                  <Link href="/admin" onClick={() => setOpen(false)}>
-                    Admin paneli
-                  </Link>
+                {isAdmin ? (
+                  <>
+                    <Link href="/admin" onClick={() => setOpen(false)}>Yönetim merkezi</Link>
+                    <Link href="/" onClick={() => setOpen(false)}>Siteyi görüntüle</Link>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/dashboard" onClick={() => setOpen(false)}>Kontrol merkezi</Link>
+                    <Link href="/plans" onClick={() => setOpen(false)}>Programlarım</Link>
+                    <Link href="/profile" onClick={() => setOpen(false)}>Profilimi düzenle</Link>
+                  </>
                 )}
-                <button type="button" onClick={logout} disabled={loggingOut}>
-                  {loggingOut ? "Çıkılıyor…" : "Çıkış yap"}
-                </button>
+                <button type="button" onClick={logout} disabled={loggingOut}>{loggingOut ? "Çıkılıyor…" : "Çıkış yap"}</button>
               </div>
             )}
           </div>
         ) : (
-          <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="button button-secondary button-small">
-            Giriş yap
-          </Link>
+          <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="button button-secondary button-small">Giriş yap</Link>
         )}
 
-        <Link href="/appointment" className="button button-primary button-small header-appointment-button">
-          Randevu al
-        </Link>
+        {!isAdmin && <Link href="/appointment" className="button button-primary button-small header-appointment-button">Randevu al</Link>}
       </div>
     </header>
   );
