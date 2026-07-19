@@ -52,6 +52,34 @@ async function requireAdmin() {
   return { error: null };
 }
 
+async function findUserIdByEmail(email: string) {
+  const admin = createAdminClient();
+  const normalized = email.trim().toLocaleLowerCase("tr-TR");
+  const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) return null;
+  return data.users.find((user) => user.email?.toLocaleLowerCase("tr-TR") === normalized)?.id ?? null;
+}
+
+async function createAppointmentNotification(input: {
+  email: string;
+  title: string;
+  message: string;
+}) {
+  const userId = await findUserIdByEmail(input.email);
+  if (!userId) return false;
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("notifications").insert({
+    user_id: userId,
+    title: input.title,
+    message: input.message,
+    href: "/appointment",
+    kind: "appointment",
+  });
+
+  return !error;
+}
+
 async function sendAppointmentEmail(input: {
   fullName: string;
   email: string;
@@ -64,15 +92,11 @@ async function sendAppointmentEmail(input: {
 }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.APPOINTMENT_FROM_EMAIL ?? "Cihad Çoban Nutrition <onboarding@resend.dev>";
-
   if (!apiKey) throw new Error("RESEND_API_KEY eksik.");
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from,
       to: [input.email],
@@ -86,8 +110,7 @@ async function sendAppointmentEmail(input: {
           <p><strong>Saat:</strong> ${escapeHtml(input.appointmentTime.slice(0, 5))}</p>
           ${input.message ? `<p><strong>Not:</strong> ${escapeHtml(input.message)}</p>` : ""}
           <p style="margin-top:28px;color:#667085;font-size:13px">Cihad Çoban Nutrition</p>
-        </div>
-      `,
+        </div>`,
     }),
   });
 
@@ -114,7 +137,6 @@ async function sendAppointmentSms(input: {
     To: formatTurkishPhone(input.phone),
     Body: `Merhaba ${input.fullName}, ${input.appointmentDate} tarihinde saat ${input.appointmentTime.slice(0, 5)} için randevunuz onaylandı. Cihad Çoban Nutrition`,
   });
-
   if (messagingServiceSid) form.set("MessagingServiceSid", messagingServiceSid);
   else form.set("From", fromNumber!);
 
@@ -189,12 +211,7 @@ export async function PATCH(
 
   const { error } = await admin
     .from("appointments")
-    .update({
-      status,
-      appointment_date: appointmentDate,
-      appointment_time: appointmentTime,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ status, appointment_date: appointmentDate, appointment_time: appointmentTime, updated_at: new Date().toISOString() })
     .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -203,6 +220,7 @@ export async function PATCH(
   let emailWarning = "";
   let smsSent = false;
   let smsWarning = "";
+  let notificationSent = false;
 
   if (changedStatus || changedTime || message.length > 0) {
     try {
@@ -220,6 +238,28 @@ export async function PATCH(
     } catch (mailError) {
       emailWarning = mailError instanceof Error ? mailError.message : "E-posta gönderilemedi.";
     }
+
+    const title = status === "confirmed"
+      ? "Randevunuz onaylandı"
+      : status === "cancelled"
+        ? "Randevunuz iptal edildi"
+        : changedTime
+          ? "Randevu tarihiniz güncellendi"
+          : changedStatus
+            ? "Randevu durumunuz değişti"
+            : "Randevunuz hakkında yeni mesaj";
+
+    const details = [
+      `${appointmentDate} · ${appointmentTime}`,
+      `Durum: ${statusLabels[status]}`,
+      message || null,
+    ].filter(Boolean).join(" — ");
+
+    notificationSent = await createAppointmentNotification({
+      email: current.email,
+      title,
+      message: details,
+    });
   }
 
   if (changedStatus && status === "confirmed") {
@@ -236,7 +276,7 @@ export async function PATCH(
     }
   }
 
-  return NextResponse.json({ ok: true, emailSent, emailWarning, smsSent, smsWarning });
+  return NextResponse.json({ ok: true, emailSent, emailWarning, smsSent, smsWarning, notificationSent });
 }
 
 export async function POST(
@@ -249,7 +289,6 @@ export async function POST(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   const message = String(body.message ?? "").trim().slice(0, 1200);
-
   if (!message) return NextResponse.json({ error: "Göndermek için bir mesaj yaz." }, { status: 400 });
 
   const admin = createAdminClient();
@@ -281,7 +320,13 @@ export async function POST(
     );
   }
 
-  return NextResponse.json({ ok: true });
+  const notificationSent = await createAppointmentNotification({
+    email: appointment.email,
+    title: "Randevunuz hakkında yeni mesaj",
+    message,
+  });
+
+  return NextResponse.json({ ok: true, notificationSent });
 }
 
 export async function DELETE(
@@ -294,7 +339,6 @@ export async function DELETE(
   const { id } = await params;
   const admin = createAdminClient();
   const { error } = await admin.from("appointments").delete().eq("id", id);
-
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
