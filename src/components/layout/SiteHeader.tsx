@@ -93,16 +93,27 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
 
   return (
     <header className="site-header shell-wide shared-header">
-      <BrandLogo href={authenticated ? "/dashboard" : "/"} subtitle="Nutrition" />
+      <BrandLogo
+        href={isAdmin ? "/admin" : authenticated ? "/dashboard" : "/"}
+        subtitle={isAdmin ? "Yönetim Paneli" : "Nutrition"}
+      />
 
       {ready ? (
         <nav className="site-nav" aria-label="Ana menü">
-          <Link href="/#features">Özellikler</Link>
-          <Link href="/#how-it-works">Nasıl çalışır?</Link>
-          <Link href="/about">Hakkımızda</Link>
-          <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>Randevu</Link>
-          {authenticated && <Link href="/dashboard" className={pathname.startsWith("/dashboard") ? "active" : ""}>Kontrol merkezi</Link>}
-          {isAdmin && <Link href="/admin" className={pathname.startsWith("/admin") ? "active" : ""}>Admin</Link>}
+          {isAdmin ? (
+            <>
+              <Link href="/admin" className={pathname.startsWith("/admin") ? "active" : ""}>Yönetim merkezi</Link>
+              <Link href="/" className={pathname === "/" ? "active" : ""}>Siteyi görüntüle</Link>
+            </>
+          ) : (
+            <>
+              <Link href="/#features">Özellikler</Link>
+              <Link href="/#how-it-works">Nasıl çalışır?</Link>
+              <Link href="/about">Hakkımızda</Link>
+              <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>Randevu</Link>
+              {authenticated && <Link href="/dashboard">Kontrol merkezi</Link>}
+            </>
+          )}
         </nav>
       ) : (
         <span className="header-nav-skeleton" aria-hidden="true" />
@@ -121,10 +132,18 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
 
             {open && (
               <div className="public-account-menu">
-                <Link href="/dashboard" onClick={() => setOpen(false)}>Kontrol merkezi</Link>
-                <Link href="/plans" onClick={() => setOpen(false)}>Programlarım</Link>
-                <Link href="/profile" onClick={() => setOpen(false)}>Profilimi düzenle</Link>
-                {isAdmin && <Link href="/admin" onClick={() => setOpen(false)}>Admin paneli</Link>}
+                {isAdmin ? (
+                  <>
+                    <Link href="/admin" onClick={() => setOpen(false)}>Yönetim merkezi</Link>
+                    <Link href="/" onClick={() => setOpen(false)}>Siteyi görüntüle</Link>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/dashboard" onClick={() => setOpen(false)}>Kontrol merkezi</Link>
+                    <Link href="/plans" onClick={() => setOpen(false)}>Programlarım</Link>
+                    <Link href="/profile" onClick={() => setOpen(false)}>Profilimi düzenle</Link>
+                  </>
+                )}
                 <button type="button" onClick={logout} disabled={loggingOut}>{loggingOut ? "Çıkılıyor…" : "Çıkış yap"}</button>
               </div>
             )}
@@ -133,7 +152,7 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
           <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="button button-secondary button-small">Giriş yap</Link>
         )}
 
-        <Link href="/appointment" className="button button-primary button-small header-appointment-button">Randevu al</Link>
+        {ready && !isAdmin && <Link href="/appointment" className="button button-primary button-small header-appointment-button">Randevu al</Link>}
       </div>
     </header>
   );
