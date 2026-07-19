@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/layout/SiteFooter";
 import { SmoothNavigation } from "@/components/layout/SmoothNavigation";
 
 import "./globals.css";
+import "./motion.css";
 
 export const metadata: Metadata = {
   title: {
