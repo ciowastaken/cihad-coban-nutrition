@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { AppNav } from "@/components/layout/AppNav";
 
@@ -23,11 +23,7 @@ type UserRow = {
   }[];
 };
 
-type AppointmentStatus =
-  | "pending"
-  | "confirmed"
-  | "cancelled"
-  | "completed";
+type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "completed";
 
 type Appointment = {
   id: string;
@@ -53,9 +49,14 @@ export default function AdminPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [updatingAppointment, setUpdatingAppointment] = useState<string | null>(null);
+  const [sendingAppointment, setSendingAppointment] = useState<string | null>(null);
+  const [deletingAppointment, setDeletingAppointment] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | AppointmentStatus>("all");
 
   async function load() {
     setLoading(true);
@@ -97,6 +98,7 @@ export default function AdminPage() {
 
     if (response.ok) {
       setUsers((current) => current.filter((user) => user.id !== id));
+      setNotice("Kullanıcı sistemden silindi.");
     } else {
       setError("Kullanıcı silinemedi.");
     }
@@ -104,15 +106,19 @@ export default function AdminPage() {
 
   async function updateAppointment(id: string, status: AppointmentStatus) {
     setUpdatingAppointment(id);
+    setError("");
+    setNotice("");
+
     const response = await fetch(`/api/admin/appointments/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
+    const json = await response.json().catch(() => ({}));
     setUpdatingAppointment(null);
 
     if (!response.ok) {
-      setError("Randevu durumu güncellenemedi.");
+      setError(json.error || "Randevu durumu güncellenemedi.");
       return;
     }
 
@@ -121,11 +127,73 @@ export default function AdminPage() {
         appointment.id === id ? { ...appointment, status } : appointment,
       ),
     );
+    setNotice(`Randevu durumu “${statusLabels[status]}” olarak güncellendi.`);
   }
 
-  const pendingCount = appointments.filter(
-    (appointment) => appointment.status === "pending",
-  ).length;
+  async function sendAppointmentEmail(appointment: Appointment) {
+    const message = prompt(
+      "E-postaya eklenecek kısa notu yazabilirsin. Boş bırakırsan yalnızca randevu durumu gönderilir:",
+      "",
+    );
+    if (message === null) return;
+
+    setSendingAppointment(appointment.id);
+    setError("");
+    setNotice("");
+
+    const response = await fetch(`/api/admin/appointments/${appointment.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+    const json = await response.json().catch(() => ({}));
+    setSendingAppointment(null);
+
+    if (!response.ok) {
+      setError(json.error || "Randevu e-postası gönderilemedi.");
+      return;
+    }
+
+    setNotice(`${appointment.email} adresine randevu e-postası gönderildi.`);
+  }
+
+  async function deleteAppointment(appointment: Appointment) {
+    if (!confirm(`${appointment.full_name} adlı kişinin bu randevusu kalıcı olarak silinsin mi?`)) return;
+
+    setDeletingAppointment(appointment.id);
+    setError("");
+    setNotice("");
+
+    const response = await fetch(`/api/admin/appointments/${appointment.id}`, {
+      method: "DELETE",
+    });
+    const json = await response.json().catch(() => ({}));
+    setDeletingAppointment(null);
+
+    if (!response.ok) {
+      setError(json.error || "Randevu silinemedi.");
+      return;
+    }
+
+    setAppointments((current) => current.filter((item) => item.id !== appointment.id));
+    setNotice("Randevu kalıcı olarak silindi.");
+  }
+
+  const pendingCount = appointments.filter((appointment) => appointment.status === "pending").length;
+
+  const filteredAppointments = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("tr-TR");
+
+    return appointments.filter((appointment) => {
+      const matchesStatus = statusFilter === "all" || appointment.status === statusFilter;
+      const matchesSearch =
+        !query ||
+        [appointment.full_name, appointment.email, appointment.phone, appointment.service_type]
+          .some((value) => value.toLocaleLowerCase("tr-TR").includes(query));
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [appointments, search, statusFilter]);
 
   return (
     <>
@@ -143,26 +211,40 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {error && (
-          <div className="admin-error">
-            {error}
-            <small>.env.local içindeki Supabase admin anahtarını ve admin rolünü kontrol et.</small>
-          </div>
-        )}
+        {error && <div className="admin-error">{error}</div>}
+        {notice && <div className="appointment-alert success" role="status">{notice}</div>}
 
         <section className="admin-section-block">
           <div className="section-title-row">
             <div><p className="eyebrow"><span /> Randevu yönetimi</p><h2>Görüşme talepleri</h2></div>
-            <span>{appointments.length} kayıt</span>
+            <button className="button" onClick={() => void load()} disabled={loading}>
+              {loading ? "Yenileniyor…" : "Listeyi yenile"}
+            </button>
+          </div>
+
+          <div className="appointment-admin-actions" style={{ marginBottom: 20, justifyContent: "flex-start", flexWrap: "wrap" }}>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Ad, e-posta, telefon veya görüşme ara"
+              style={{ minWidth: 280 }}
+            />
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | AppointmentStatus)}>
+              <option value="all">Tüm durumlar</option>
+              {Object.entries(statusLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <span>{filteredAppointments.length} / {appointments.length} kayıt</span>
           </div>
 
           {loading ? (
             <div className="empty-state">Panel yükleniyor…</div>
-          ) : appointments.length === 0 ? (
-            <div className="empty-state"><b>Henüz randevu talebi yok</b><p>Yeni talepler burada listelenecek.</p></div>
+          ) : filteredAppointments.length === 0 ? (
+            <div className="empty-state"><b>Eşleşen randevu yok</b><p>Arama veya filtreyi değiştir.</p></div>
           ) : (
             <div className="appointment-admin-list">
-              {appointments.map((appointment) => (
+              {filteredAppointments.map((appointment) => (
                 <article className="appointment-admin-card" key={appointment.id}>
                   <div className="appointment-admin-main">
                     <div className="appointment-date-box">
@@ -189,7 +271,20 @@ export default function AdminPage() {
                         <option key={value} value={value}>{label}</option>
                       ))}
                     </select>
-                    <a href={`mailto:${appointment.email}?subject=Randevu talebiniz hakkında`}>E-posta gönder</a>
+                    <button
+                      className="button button-primary"
+                      onClick={() => void sendAppointmentEmail(appointment)}
+                      disabled={sendingAppointment === appointment.id}
+                    >
+                      {sendingAppointment === appointment.id ? "Gönderiliyor…" : "E-posta gönder"}
+                    </button>
+                    <button
+                      className="danger-button"
+                      onClick={() => void deleteAppointment(appointment)}
+                      disabled={deletingAppointment === appointment.id}
+                    >
+                      {deletingAppointment === appointment.id ? "Siliniyor…" : "Randevuyu sil"}
+                    </button>
                   </div>
                 </article>
               ))}
