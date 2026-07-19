@@ -16,13 +16,23 @@ type UserRow = {
 };
 type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "completed";
 type Appointment = {
-  id: string; full_name: string; email: string; phone: string; service_type: string;
-  appointment_date: string; appointment_time: string; note: string | null;
-  status: AppointmentStatus; created_at: string;
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  service_type: string;
+  appointment_date: string;
+  appointment_time: string;
+  note: string | null;
+  status: AppointmentStatus;
+  created_at: string;
 };
 
 const statusLabels: Record<AppointmentStatus, string> = {
-  pending: "Bekliyor", confirmed: "Onaylandı", cancelled: "İptal edildi", completed: "Tamamlandı",
+  pending: "Bekliyor",
+  confirmed: "Onaylandı",
+  cancelled: "İptal edildi",
+  completed: "Tamamlandı",
 };
 const slots = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
 
@@ -46,15 +56,18 @@ export default function AdminPage() {
   const [draftMessage, setDraftMessage] = useState("");
 
   async function load() {
-    setLoading(true); setError("");
+    setLoading(true);
+    setError("");
     const [usersResponse, appointmentsResponse] = await Promise.all([
       fetch("/api/admin/users", { cache: "no-store" }),
       fetch("/api/admin/appointments", { cache: "no-store" }),
     ]);
     const usersJson = await usersResponse.json().catch(() => ({}));
     const appointmentsJson = await appointmentsResponse.json().catch(() => ({}));
-    if (!usersResponse.ok) setError(usersJson.error || "Admin verileri alınamadı."); else setUsers(usersJson.users ?? []);
-    if (!appointmentsResponse.ok) setError((current) => current || appointmentsJson.error || "Randevular alınamadı."); else setAppointments(appointmentsJson.appointments ?? []);
+    if (!usersResponse.ok) setError(usersJson.error || "Admin verileri alınamadı.");
+    else setUsers(usersJson.users ?? []);
+    if (!appointmentsResponse.ok) setError((current) => current || appointmentsJson.error || "Randevular alınamadı.");
+    else setAppointments(appointmentsJson.appointments ?? []);
     setLoading(false);
   }
 
@@ -65,8 +78,10 @@ export default function AdminPage() {
     setDeletingUser(id);
     const response = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
     setDeletingUser(null);
-    if (response.ok) { setUsers((current) => current.filter((user) => user.id !== id)); setNotice("Kullanıcı sistemden silindi."); }
-    else setError("Kullanıcı silinemedi.");
+    if (response.ok) {
+      setUsers((current) => current.filter((user) => user.id !== id));
+      setNotice("Kullanıcı sistemden silindi.");
+    } else setError("Kullanıcı silinemedi.");
   }
 
   function updateUserPlans(userId: string, plans: Plan[]) {
@@ -74,45 +89,109 @@ export default function AdminPage() {
   }
 
   function startEditing(appointment: Appointment) {
-    setEditingId(appointment.id); setEmailId(null);
-    setDraftDate(appointment.appointment_date); setDraftTime(appointment.appointment_time.slice(0, 5));
-    setDraftStatus(appointment.status); setDraftMessage(""); setError(""); setNotice("");
+    setEditingId(appointment.id);
+    setEmailId(null);
+    setDraftDate(appointment.appointment_date);
+    setDraftTime(appointment.appointment_time.slice(0, 5));
+    setDraftStatus(appointment.status);
+    setDraftMessage("");
+    setError("");
+    setNotice("");
+  }
+
+  function notificationResult(json: Record<string, unknown>, successText: string) {
+    const warnings = [json.emailWarning, json.smsWarning].filter(Boolean).join(" ");
+    if (warnings) setError(`${successText} Ancak: ${warnings}`);
+    else if (json.emailSent && json.smsSent) setNotice(`${successText} Kullanıcıya e-posta ve SMS gönderildi.`);
+    else if (json.emailSent) setNotice(`${successText} Kullanıcıya e-posta gönderildi. SMS servisi yapılandırılmadı.`);
+    else setNotice(successText);
+  }
+
+  async function approveAppointment(appointment: Appointment) {
+    if (!confirm(`${appointment.full_name} adlı kişinin randevusu onaylansın mı?`)) return;
+    setBusyAppointment(appointment.id);
+    setError("");
+    setNotice("");
+
+    const response = await fetch(`/api/admin/appointments/${appointment.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "confirmed",
+        appointmentDate: appointment.appointment_date,
+        appointmentTime: appointment.appointment_time.slice(0, 5),
+        message: "Randevunuz onaylandı.",
+      }),
+    });
+    const json = await response.json().catch(() => ({}));
+    setBusyAppointment(null);
+
+    if (!response.ok) {
+      setError(json.error || "Randevu onaylanamadı.");
+      return;
+    }
+
+    setAppointments((current) => current.map((item) => item.id === appointment.id ? { ...item, status: "confirmed" } : item));
+    notificationResult(json, "Randevu onaylandı.");
   }
 
   async function saveAppointment(appointment: Appointment) {
-    setBusyAppointment(appointment.id); setError(""); setNotice("");
+    setBusyAppointment(appointment.id);
+    setError("");
+    setNotice("");
     const response = await fetch(`/api/admin/appointments/${appointment.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: draftStatus, appointmentDate: draftDate, appointmentTime: draftTime, message: draftMessage }),
     });
-    const json = await response.json().catch(() => ({})); setBusyAppointment(null);
-    if (!response.ok) { setError(json.error || "Randevu güncellenemedi."); return; }
+    const json = await response.json().catch(() => ({}));
+    setBusyAppointment(null);
+    if (!response.ok) {
+      setError(json.error || "Randevu güncellenemedi.");
+      return;
+    }
     setAppointments((current) => current.map((item) => item.id === appointment.id ? { ...item, status: draftStatus, appointment_date: draftDate, appointment_time: draftTime } : item));
-    setEditingId(null); setDraftMessage("");
-    if (json.emailWarning) setError(`Randevu güncellendi fakat e-posta gönderilemedi: ${json.emailWarning}`);
-    else if (json.emailSent) setNotice("Randevu güncellendi ve kullanıcıya e-posta gönderildi.");
-    else setNotice("Randevu güncellendi.");
+    setEditingId(null);
+    setDraftMessage("");
+    notificationResult(json, "Randevu güncellendi.");
   }
 
   async function sendAppointmentEmail(appointment: Appointment) {
     const message = emailMessage.trim();
-    if (!message) { setError("E-posta göndermek için bir mesaj yaz."); return; }
-    setBusyAppointment(appointment.id); setError(""); setNotice("");
+    if (!message) {
+      setError("E-posta göndermek için bir mesaj yaz.");
+      return;
+    }
+    setBusyAppointment(appointment.id);
+    setError("");
+    setNotice("");
     const response = await fetch(`/api/admin/appointments/${appointment.id}`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
     });
-    const json = await response.json().catch(() => ({})); setBusyAppointment(null);
-    if (!response.ok) { setError(json.error || "Randevu e-postası gönderilemedi."); return; }
-    setNotice(`${appointment.email} adresine e-posta gönderildi.`); setEmailId(null); setEmailMessage("");
+    const json = await response.json().catch(() => ({}));
+    setBusyAppointment(null);
+    if (!response.ok) {
+      setError(json.error || "Randevu e-postası gönderilemedi.");
+      return;
+    }
+    setNotice(`${appointment.email} adresine e-posta gönderildi.`);
+    setEmailId(null);
+    setEmailMessage("");
   }
 
   async function deleteAppointment(appointment: Appointment) {
     if (!confirm(`${appointment.full_name} adlı kişinin bu randevusu kalıcı olarak silinsin mi?`)) return;
     setBusyAppointment(appointment.id);
     const response = await fetch(`/api/admin/appointments/${appointment.id}`, { method: "DELETE" });
-    const json = await response.json().catch(() => ({})); setBusyAppointment(null);
+    const json = await response.json().catch(() => ({}));
+    setBusyAppointment(null);
     if (!response.ok) setError(json.error || "Randevu silinemedi.");
-    else { setAppointments((current) => current.filter((item) => item.id !== appointment.id)); setNotice("Randevu kalıcı olarak silindi."); }
+    else {
+      setAppointments((current) => current.filter((item) => item.id !== appointment.id));
+      setNotice("Randevu kalıcı olarak silindi.");
+    }
   }
 
   const pendingCount = appointments.filter((appointment) => appointment.status === "pending").length;
@@ -122,7 +201,8 @@ export default function AdminPage() {
     const query = search.trim().toLocaleLowerCase("tr-TR");
     return appointments.filter((appointment) => {
       const matchesStatus = statusFilter === "all" || appointment.status === statusFilter;
-      const matchesSearch = !query || [appointment.full_name, appointment.email, appointment.phone, appointment.service_type].some((value) => value.toLocaleLowerCase("tr-TR").includes(query));
+      const matchesSearch = !query || [appointment.full_name, appointment.email, appointment.phone, appointment.service_type]
+        .some((value) => value.toLocaleLowerCase("tr-TR").includes(query));
       return matchesStatus && matchesSearch;
     });
   }, [appointments, search, statusFilter]);
@@ -151,18 +231,31 @@ export default function AdminPage() {
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | AppointmentStatus)}><option value="all">Tüm durumlar</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
             <span>{filteredAppointments.length} / {appointments.length} kayıt</span>
           </div>
+
           {loading ? <div className="empty-state">Panel yükleniyor…</div> : filteredAppointments.length === 0 ? <div className="empty-state"><b>Eşleşen randevu yok</b><p>Arama veya filtreyi değiştir.</p></div> : (
             <div className="appointment-admin-list">
               {filteredAppointments.map((appointment) => {
-                const user = matchingUser(appointment); const previousCount = appointments.filter((item) => item.email === appointment.email).length;
-                const isEditing = editingId === appointment.id; const showingDetails = detailId === appointment.id; const composingEmail = emailId === appointment.id;
+                const user = matchingUser(appointment);
+                const previousCount = appointments.filter((item) => item.email === appointment.email).length;
+                const isEditing = editingId === appointment.id;
+                const showingDetails = detailId === appointment.id;
+                const composingEmail = emailId === appointment.id;
                 return (
                   <article className="appointment-admin-card admin-appointment-card" key={appointment.id}>
                     <div className="appointment-admin-main"><div className="appointment-date-box"><b>{new Date(`${appointment.appointment_date}T00:00:00`).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" })}</b><span>{appointment.appointment_time.slice(0, 5)}</span></div><div><div className="appointment-admin-title"><h3>{appointment.full_name}</h3><span className={`appointment-status ${appointment.status}`}>{statusLabels[appointment.status]}</span></div><p>{appointment.service_type}</p><small>{appointment.email} · {appointment.phone}</small>{appointment.note && <blockquote>{appointment.note}</blockquote>}</div></div>
-                    {isEditing && <div className="admin-inline-panel"><strong>Randevuyu düzenle</strong><div className="admin-inline-fields"><input type="date" value={draftDate} onChange={(event) => setDraftDate(event.target.value)} /><select value={draftTime} onChange={(event) => setDraftTime(event.target.value)}>{slots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select><select value={draftStatus} onChange={(event) => setDraftStatus(event.target.value as AppointmentStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div><textarea value={draftMessage} onChange={(event) => setDraftMessage(event.target.value)} placeholder="Değişiklikle birlikte kullanıcıya gönderilecek isteğe bağlı not" rows={3} maxLength={1200} /><p className="admin-email-hint">Tarih, saat veya durum değişirse bildirim otomatik gider. Sadece not yazarsan da e-posta gönderilir.</p><div className="admin-panel-actions"><button className="admin-action-button primary" onClick={() => void saveAppointment(appointment)} disabled={busyAppointment === appointment.id}>{busyAppointment === appointment.id ? "Gönderiliyor…" : "Kaydet ve bildir"}</button><button className="admin-action-button" onClick={() => setEditingId(null)}>Vazgeç</button></div></div>}
+
+                    {isEditing && <div className="admin-inline-panel"><strong>Randevuyu düzenle</strong><div className="admin-inline-fields"><input type="date" value={draftDate} onChange={(event) => setDraftDate(event.target.value)} /><select value={draftTime} onChange={(event) => setDraftTime(event.target.value)}>{slots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select><select value={draftStatus} onChange={(event) => setDraftStatus(event.target.value as AppointmentStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div><textarea value={draftMessage} onChange={(event) => setDraftMessage(event.target.value)} placeholder="Değişiklikle birlikte kullanıcıya gönderilecek isteğe bağlı not" rows={3} maxLength={1200} /><p className="admin-email-hint">Tarih, saat veya durum değişirse e-posta otomatik gider. Onaylama işleminde SMS de gönderilir.</p><div className="admin-panel-actions"><button className="admin-action-button primary" onClick={() => void saveAppointment(appointment)} disabled={busyAppointment === appointment.id}>{busyAppointment === appointment.id ? "Gönderiliyor…" : "Kaydet ve bildir"}</button><button className="admin-action-button" onClick={() => setEditingId(null)}>Vazgeç</button></div></div>}
                     {showingDetails && <div className="admin-detail-box"><strong>Danışan özeti</strong><p>Toplam randevu: {previousCount}</p><p>Kilo: {user?.profile?.weight_kg ? `${user.profile.weight_kg} kg` : "—"} · Hedef: {user?.profile?.target_weight_kg ? `${user.profile.target_weight_kg} kg` : "—"}</p><p>Aktif programlar: {user?.plans.length ?? 0}</p>{user?.plans.slice(0, 3).map((plan) => <small key={plan.id} style={{ display: "block" }}>{plan.title} · {plan.status} · {plan.target_calories} kcal</small>)}</div>}
                     {composingEmail && <div className="admin-inline-panel"><strong>Kullanıcıya e-posta gönder</strong><p className="admin-email-hint">Alıcı: {appointment.email}</p><textarea value={emailMessage} onChange={(event) => setEmailMessage(event.target.value)} placeholder="Göndermek istediğin mesajı yaz…" rows={4} maxLength={1200} autoFocus /><div className="admin-panel-actions"><button className="admin-action-button primary" onClick={() => void sendAppointmentEmail(appointment)} disabled={busyAppointment === appointment.id}>{busyAppointment === appointment.id ? "Gönderiliyor…" : "E-postayı gönder"}</button><button className="admin-action-button" onClick={() => { setEmailId(null); setEmailMessage(""); }}>Vazgeç</button></div></div>}
-                    <div className="admin-appointment-actions"><button className="admin-action-button" onClick={() => startEditing(appointment)}>Düzenle</button><button className="admin-action-button" onClick={() => setDetailId(showingDetails ? null : appointment.id)}>{showingDetails ? "Detayı kapat" : "Danışan detayı"}</button><button className="admin-action-button primary" onClick={() => { setEmailId(composingEmail ? null : appointment.id); setEditingId(null); setEmailMessage(""); }}>{composingEmail ? "E-postayı kapat" : "Mesaj gönder"}</button><a className="admin-action-button primary" href={`https://wa.me/90${appointment.phone.replace(/\D/g, "").replace(/^0/, "")}?text=${encodeURIComponent(`Merhaba ${appointment.full_name}, randevunuz hakkında iletişime geçiyorum.`)}`} target="_blank" rel="noreferrer">WhatsApp</a><button className="admin-action-button danger" onClick={() => void deleteAppointment(appointment)} disabled={busyAppointment === appointment.id}>{busyAppointment === appointment.id ? "İşleniyor…" : "Randevuyu sil"}</button></div>
+
+                    <div className="admin-appointment-actions">
+                      {appointment.status === "pending" && <button className="admin-action-button approve" onClick={() => void approveAppointment(appointment)} disabled={busyAppointment === appointment.id}>{busyAppointment === appointment.id ? "Onaylanıyor…" : "Randevuyu onayla"}</button>}
+                      <button className="admin-action-button" onClick={() => startEditing(appointment)}>Düzenle</button>
+                      <button className="admin-action-button" onClick={() => setDetailId(showingDetails ? null : appointment.id)}>{showingDetails ? "Detayı kapat" : "Danışan detayı"}</button>
+                      <button className="admin-action-button primary" onClick={() => { setEmailId(composingEmail ? null : appointment.id); setEditingId(null); setEmailMessage(""); }}>{composingEmail ? "E-postayı kapat" : "Mesaj gönder"}</button>
+                      <a className="admin-action-button primary" href={`https://wa.me/90${appointment.phone.replace(/\D/g, "").replace(/^0/, "")}?text=${encodeURIComponent(`Merhaba ${appointment.full_name}, randevunuz hakkında iletişime geçiyorum.`)}`} target="_blank" rel="noreferrer">WhatsApp</a>
+                      <button className="admin-action-button danger" onClick={() => void deleteAppointment(appointment)} disabled={busyAppointment === appointment.id}>{busyAppointment === appointment.id ? "İşleniyor…" : "Randevuyu sil"}</button>
+                    </div>
                   </article>
                 );
               })}
