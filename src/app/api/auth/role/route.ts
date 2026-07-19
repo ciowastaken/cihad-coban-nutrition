@@ -10,13 +10,13 @@ export async function GET() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ authenticated: false, role: null });
+    return NextResponse.json({ authenticated: false, role: null, membershipTier: null });
   }
 
   const admin = createAdminClient();
   const { data: profile, error } = await admin
     .from("profiles")
-    .select("full_name, role")
+    .select("full_name, role, membership_tier")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -27,6 +27,7 @@ export async function GET() {
   return NextResponse.json({
     authenticated: true,
     role: profile?.role ?? null,
+    membershipTier: profile?.membership_tier ?? "standard",
     fullName: profile?.full_name ?? null,
     email: user.email ?? "",
   });
