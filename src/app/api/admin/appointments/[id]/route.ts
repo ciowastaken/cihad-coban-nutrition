@@ -157,7 +157,7 @@ export async function PATCH(
 
   let emailSent = false;
   let emailWarning = "";
-  if (changedStatus || changedTime) {
+  if (changedStatus || changedTime || message.length > 0) {
     try {
       await sendAppointmentEmail({
         fullName: current.full_name,
@@ -167,7 +167,7 @@ export async function PATCH(
         appointmentTime,
         status,
         message,
-        subjectPrefix: changedTime ? "Randevunuz güncellendi" : "Randevu durumunuz",
+        subjectPrefix: changedTime ? "Randevunuz güncellendi" : message ? "Randevunuz hakkında" : "Randevu durumunuz",
       });
       emailSent = true;
     } catch (mailError) {
@@ -189,6 +189,10 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const message = String(body.message ?? "").trim().slice(0, 1200);
 
+  if (!message) {
+    return NextResponse.json({ error: "Göndermek için bir mesaj yaz." }, { status: 400 });
+  }
+
   const admin = createAdminClient();
   const { data: appointment, error: appointmentError } = await admin
     .from("appointments")
@@ -209,6 +213,7 @@ export async function POST(
       appointmentTime: String(appointment.appointment_time),
       status: appointment.status as AppointmentStatus,
       message,
+      subjectPrefix: "Randevunuz hakkında",
     });
   } catch (mailError) {
     return NextResponse.json(
