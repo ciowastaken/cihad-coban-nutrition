@@ -14,9 +14,23 @@ type SiteHeaderProps = {
 type RoleResponse = {
   authenticated?: boolean;
   role?: string | null;
+  membershipTier?: "standard" | "pro" | "clinic" | null;
   fullName?: string | null;
   email?: string;
 };
+
+function membershipLabel(isAdmin: boolean, tier?: RoleResponse["membershipTier"]) {
+  if (isAdmin) return "Admin";
+  if (tier === "clinic") return "Klinik";
+  if (tier === "pro") return "PRO";
+  return "Standart";
+}
+
+function formatFallbackName(email?: string) {
+  const value = email?.split("@")[0]?.replace(/[._-]+/g, " ").trim();
+  if (!value) return "Kullanıcı";
+  return value.replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase("tr-TR"));
+}
 
 export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
   const pathname = usePathname();
@@ -26,8 +40,9 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
   const [ready, setReady] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [membershipTier, setMembershipTier] = useState<RoleResponse["membershipTier"]>("standard");
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("Hesabım");
+  const [name, setName] = useState("Kullanıcı");
   const [email, setEmail] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -47,7 +62,8 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
       if (!response?.ok) {
         setAuthenticated(false);
         setIsAdmin(false);
-        setName("Hesabım");
+        setMembershipTier("standard");
+        setName("Kullanıcı");
         setEmail("");
         setReady(true);
         return;
@@ -55,9 +71,12 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
 
       const data = (await response.json().catch(() => ({}))) as RoleResponse;
       const signedIn = data.authenticated === true;
+      const admin = signedIn && data.role === "admin";
+
       setAuthenticated(signedIn);
-      setIsAdmin(signedIn && data.role === "admin");
-      setName(data.fullName || data.email?.split("@")[0] || "Hesabım");
+      setIsAdmin(admin);
+      setMembershipTier(data.membershipTier || "standard");
+      setName(data.fullName?.trim() || formatFallbackName(data.email));
       setEmail(data.email || "");
       setReady(true);
     }
@@ -101,17 +120,15 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
       {ready ? (
         <nav className="site-nav" aria-label="Ana menü">
           {isAdmin ? (
-            <>
-              <Link href="/admin" className={pathname.startsWith("/admin") ? "active" : ""}>Yönetim merkezi</Link>
-              <Link href="/" className={pathname === "/" ? "active" : ""}>Siteyi görüntüle</Link>
-            </>
+            <Link href="/admin" className={pathname.startsWith("/admin") ? "active" : ""}>Yönetim merkezi</Link>
           ) : (
             <>
               <Link href="/#features">Özellikler</Link>
               <Link href="/#how-it-works">Nasıl çalışır?</Link>
               <Link href="/about">Hakkımızda</Link>
+              <Link href="/pricing" className={pathname === "/pricing" ? "active" : ""}>Üyelikler</Link>
               <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>Randevu</Link>
-              {authenticated && <Link href="/dashboard">Kontrol merkezi</Link>}
+              {authenticated && <Link href="/dashboard" className={pathname.startsWith("/dashboard") ? "active" : ""}>Kontrol merkezi</Link>}
             </>
           )}
         </nav>
@@ -126,22 +143,20 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
           <div className="public-account" ref={menuRef}>
             <button type="button" className="public-account-trigger" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
               <span className="public-account-avatar">{name.slice(0, 1).toLocaleUpperCase("tr-TR")}</span>
-              <span className="public-account-copy"><b>{name}</b><small>{email || "Üye hesabı"}</small></span>
+              <span className="public-account-copy"><b>{name}</b><small>{membershipLabel(isAdmin, membershipTier)} · {email || "Üye hesabı"}</small></span>
               <span className="account-chevron">⌄</span>
             </button>
 
             {open && (
               <div className="public-account-menu">
                 {isAdmin ? (
-                  <>
-                    <Link href="/admin" onClick={() => setOpen(false)}>Yönetim merkezi</Link>
-                    <Link href="/" onClick={() => setOpen(false)}>Siteyi görüntüle</Link>
-                  </>
+                  <Link href="/admin" onClick={() => setOpen(false)}>Yönetim merkezi</Link>
                 ) : (
                   <>
                     <Link href="/dashboard" onClick={() => setOpen(false)}>Kontrol merkezi</Link>
                     <Link href="/plans" onClick={() => setOpen(false)}>Programlarım</Link>
                     <Link href="/profile" onClick={() => setOpen(false)}>Profilimi düzenle</Link>
+                    <Link href="/pricing" onClick={() => setOpen(false)}>Üyeliğim: {membershipLabel(false, membershipTier)}</Link>
                   </>
                 )}
                 <button type="button" onClick={logout} disabled={loggingOut}>{loggingOut ? "Çıkılıyor…" : "Çıkış yap"}</button>
