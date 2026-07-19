@@ -125,7 +125,7 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
             <>
               <Link href="/#features">Özellikler</Link>
               <Link href="/#how-it-works">Nasıl çalışır?</Link>
-              <Link href="/about">Hakkımızda</Link>
+              <Link href="/about" className={pathname === "/about" ? "active" : ""}>Hakkımızda</Link>
               <Link href="/pricing" className={pathname === "/pricing" ? "active" : ""}>Üyelikler</Link>
               <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>Randevu</Link>
               {authenticated && <Link href="/dashboard" className={pathname.startsWith("/dashboard") ? "active" : ""}>Kontrol merkezi</Link>}
@@ -156,6 +156,7 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
                     <Link href="/dashboard" onClick={() => setOpen(false)}>Kontrol merkezi</Link>
                     <Link href="/plans" onClick={() => setOpen(false)}>Programlarım</Link>
                     <Link href="/profile" onClick={() => setOpen(false)}>Profilimi düzenle</Link>
+                    <Link href="/onboarding" onClick={() => setOpen(false)}>Yeni hesaplama</Link>
                     <Link href="/pricing" onClick={() => setOpen(false)}>Üyeliğim: {membershipLabel(false, membershipTier)}</Link>
                   </>
                 )}
@@ -167,7 +168,13 @@ export function SiteHeader({ variant: _variant = "home" }: SiteHeaderProps) {
           <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="button button-secondary button-small">Giriş yap</Link>
         )}
 
-        {ready && !isAdmin && <Link href="/appointment" className="button button-primary button-small header-appointment-button">Randevu al</Link>}
+        {ready && !isAdmin && (
+          authenticated ? (
+            <Link href="/onboarding" className="button button-primary button-small header-appointment-button">Yeni hesaplama</Link>
+          ) : (
+            <Link href="/appointment" className="button button-primary button-small header-appointment-button">Randevu al</Link>
+          )
+        )}
       </div>
     </header>
   );
