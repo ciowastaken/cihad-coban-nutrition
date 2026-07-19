@@ -22,6 +22,15 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
+function formatTurkishPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.startsWith("90") && digits.length === 12) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length === 11) return `+90${digits.slice(1)}`;
+  if (digits.length === 10) return `+90${digits}`;
+  if (value.trim().startsWith("+") && digits.length >= 10) return `+${digits}`;
+  throw new Error("Telefon numarası SMS gönderimine uygun değil.");
+}
+
 async function requireAdmin() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -83,9 +92,46 @@ async function sendAppointmentEmail(input: {
   });
 
   const detail = await response.text();
-  if (!response.ok) {
-    throw new Error(`Resend hatası (${response.status}): ${detail}`);
+  if (!response.ok) throw new Error(`Resend hatası (${response.status}): ${detail}`);
+}
+
+async function sendAppointmentSms(input: {
+  fullName: string;
+  phone: string;
+  appointmentDate: string;
+  appointmentTime: string;
+}) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_FROM_NUMBER;
+  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+
+  if (!accountSid || !authToken || (!fromNumber && !messagingServiceSid)) {
+    throw new Error("SMS için Twilio ortam değişkenleri eksik.");
   }
+
+  const form = new URLSearchParams({
+    To: formatTurkishPhone(input.phone),
+    Body: `Merhaba ${input.fullName}, ${input.appointmentDate} tarihinde saat ${input.appointmentTime.slice(0, 5)} için randevunuz onaylandı. Cihad Çoban Nutrition`,
+  });
+
+  if (messagingServiceSid) form.set("MessagingServiceSid", messagingServiceSid);
+  else form.set("From", fromNumber!);
+
+  const response = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form,
+    },
+  );
+
+  const detail = await response.text();
+  if (!response.ok) throw new Error(`Twilio hatası (${response.status}): ${detail}`);
 }
 
 export async function PATCH(
@@ -117,7 +163,7 @@ export async function PATCH(
   const admin = createAdminClient();
   const { data: current, error: currentError } = await admin
     .from("appointments")
-    .select("full_name,email,service_type,appointment_date,appointment_time,status")
+    .select("full_name,email,phone,service_type,appointment_date,appointment_time,status")
     .eq("id", id)
     .single();
 
@@ -151,12 +197,13 @@ export async function PATCH(
     })
     .eq("id", id);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   let emailSent = false;
   let emailWarning = "";
+  let smsSent = false;
+  let smsWarning = "";
+
   if (changedStatus || changedTime || message.length > 0) {
     try {
       await sendAppointmentEmail({
@@ -167,7 +214,7 @@ export async function PATCH(
         appointmentTime,
         status,
         message,
-        subjectPrefix: changedTime ? "Randevunuz güncellendi" : message ? "Randevunuz hakkında" : "Randevu durumunuz",
+        subjectPrefix: status === "confirmed" ? "Randevunuz onaylandı" : changedTime ? "Randevunuz güncellendi" : message ? "Randevunuz hakkında" : "Randevu durumunuz",
       });
       emailSent = true;
     } catch (mailError) {
@@ -175,7 +222,21 @@ export async function PATCH(
     }
   }
 
-  return NextResponse.json({ ok: true, emailSent, emailWarning });
+  if (changedStatus && status === "confirmed") {
+    try {
+      await sendAppointmentSms({
+        fullName: current.full_name,
+        phone: current.phone,
+        appointmentDate,
+        appointmentTime,
+      });
+      smsSent = true;
+    } catch (smsError) {
+      smsWarning = smsError instanceof Error ? smsError.message : "SMS gönderilemedi.";
+    }
+  }
+
+  return NextResponse.json({ ok: true, emailSent, emailWarning, smsSent, smsWarning });
 }
 
 export async function POST(
@@ -189,9 +250,7 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const message = String(body.message ?? "").trim().slice(0, 1200);
 
-  if (!message) {
-    return NextResponse.json({ error: "Göndermek için bir mesaj yaz." }, { status: 400 });
-  }
+  if (!message) return NextResponse.json({ error: "Göndermek için bir mesaj yaz." }, { status: 400 });
 
   const admin = createAdminClient();
   const { data: appointment, error: appointmentError } = await admin
@@ -236,9 +295,6 @@ export async function DELETE(
   const admin = createAdminClient();
   const { error } = await admin.from("appointments").delete().eq("id", id);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
