@@ -82,7 +82,7 @@ export function UserPlanManager({ userId, plans, onChange, onNotice, onError }: 
   }
 
   return (
-    <div className="admin-plans admin-plan-manager">
+    <div className="admin-plan-manager">
       <div className="admin-plan-manager-head">
         <div className="admin-plan-title">
           <div>
@@ -99,10 +99,8 @@ export function UserPlanManager({ userId, plans, onChange, onNotice, onError }: 
       {open && (
         <div className="admin-plan-form">
           <div className="admin-plan-form-head">
-            <div>
-              <strong>Yeni program oluştur</strong>
-              <p>Temel bilgileri gir; kullanıcı programını kendi hesabında görecek.</p>
-            </div>
+            <strong>Yeni program oluştur</strong>
+            <p>Temel bilgileri gir; kullanıcı programını kendi hesabında görecek.</p>
           </div>
 
           <div className="admin-plan-fields">
