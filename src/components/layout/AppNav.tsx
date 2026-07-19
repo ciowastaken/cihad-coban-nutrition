@@ -50,21 +50,27 @@ export function AppNav() {
   return (
     <header className="app-nav-wrap">
       <div className="app-nav shell-wide">
-        <BrandLogo href="/" subtitle="Nutrition Platform" />
+        <BrandLogo href={isAdmin ? "/admin" : "/"} subtitle={isAdmin ? "Yönetim Paneli" : "Nutrition Platform"} />
 
         <nav className="app-nav-links" aria-label="Ana menü">
-          <Link href="/#features">Özellikler</Link>
-          <Link href="/#how-it-works">Nasıl çalışır?</Link>
-          <Link href="/about" className={pathname === "/about" ? "active" : ""}>Hakkımızda</Link>
-          <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>Randevu</Link>
-          <Link href="/dashboard" className={pathname.startsWith("/dashboard") ? "active" : ""}>Kontrol merkezi</Link>
-          {isAdmin && (
-            <Link href="/admin" className={pathname.startsWith("/admin") ? "active" : ""}>Admin</Link>
+          {isAdmin ? (
+            <>
+              <Link href="/admin" className={pathname.startsWith("/admin") ? "active" : ""}>Yönetim merkezi</Link>
+              <Link href="/" className={pathname === "/" ? "active" : ""}>Siteyi görüntüle</Link>
+            </>
+          ) : (
+            <>
+              <Link href="/#features">Özellikler</Link>
+              <Link href="/#how-it-works">Nasıl çalışır?</Link>
+              <Link href="/about" className={pathname === "/about" ? "active" : ""}>Hakkımızda</Link>
+              <Link href="/appointment" className={pathname === "/appointment" ? "active" : ""}>Randevu</Link>
+              <Link href="/dashboard" className={pathname.startsWith("/dashboard") ? "active" : ""}>Kontrol merkezi</Link>
+            </>
           )}
         </nav>
 
         <div className="nav-account" ref={menuRef}>
-          <Link href="/onboarding" className="button button-primary button-small nav-new-plan">Yeni hesaplama</Link>
+          {!isAdmin && <Link href="/onboarding" className="button button-primary button-small nav-new-plan">Yeni hesaplama</Link>}
           <button type="button" className="account-trigger" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
             <span className="account-avatar">{name.slice(0, 1).toUpperCase()}</span>
             <span className="account-copy"><b>{name}</b><small>{email || "Üye hesabı"}</small></span>
@@ -73,9 +79,17 @@ export function AppNav() {
 
           {open && (
             <div className="account-menu">
-              <Link href="/profile" onClick={() => setOpen(false)}>Profili düzenle</Link>
-              <Link href="/plans" onClick={() => setOpen(false)}>Programlarım</Link>
-              {isAdmin && <Link href="/admin" onClick={() => setOpen(false)}>Admin paneli</Link>}
+              {isAdmin ? (
+                <>
+                  <Link href="/admin" onClick={() => setOpen(false)}>Yönetim merkezi</Link>
+                  <Link href="/" onClick={() => setOpen(false)}>Siteyi görüntüle</Link>
+                </>
+              ) : (
+                <>
+                  <Link href="/profile" onClick={() => setOpen(false)}>Profili düzenle</Link>
+                  <Link href="/plans" onClick={() => setOpen(false)}>Programlarım</Link>
+                </>
+              )}
               <button type="button" onClick={logout} disabled={loading}>{loading ? "Çıkılıyor…" : "Çıkış yap"}</button>
             </div>
           )}
