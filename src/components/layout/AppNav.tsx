@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { createClient } from "@/lib/supabase/client";
 
 type AccountResponse = {
@@ -82,28 +83,31 @@ export function AppNav() {
           )}
         </nav>
 
-        <div className="nav-account" ref={menuRef}>
-          {!isAdmin && <Link href="/onboarding" className="button button-primary button-small nav-new-plan">Yeni hesaplama</Link>}
-          <button type="button" className="account-trigger" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-            <span className="account-avatar">{name.slice(0, 1).toUpperCase()}</span>
-            <span className="account-copy"><b>{name}</b><small>{accountLabel(isAdmin, membershipTier)} · {email || "Üye hesabı"}</small></span>
-            <span>⌄</span>
-          </button>
+        <div className="flex items-center gap-3">
+          <NotificationBell />
+          <div className="nav-account" ref={menuRef}>
+            {!isAdmin && <Link href="/onboarding" className="button button-primary button-small nav-new-plan">Yeni hesaplama</Link>}
+            <button type="button" className="account-trigger" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+              <span className="account-avatar">{name.slice(0, 1).toUpperCase()}</span>
+              <span className="account-copy"><b>{name}</b><small>{accountLabel(isAdmin, membershipTier)} · {email || "Üye hesabı"}</small></span>
+              <span>⌄</span>
+            </button>
 
-          {open && (
-            <div className="account-menu">
-              {isAdmin ? (
-                <Link href="/admin" onClick={() => setOpen(false)}>Yönetim merkezi</Link>
-              ) : (
-                <>
-                  <Link href="/profile" onClick={() => setOpen(false)}>Profili düzenle</Link>
-                  <Link href="/plans" onClick={() => setOpen(false)}>Programlarım</Link>
-                  <Link href="/pricing" onClick={() => setOpen(false)}>Üyeliğim: {accountLabel(false, membershipTier)}</Link>
-                </>
-              )}
-              <button type="button" onClick={logout} disabled={loading}>{loading ? "Çıkılıyor…" : "Çıkış yap"}</button>
-            </div>
-          )}
+            {open && (
+              <div className="account-menu">
+                {isAdmin ? (
+                  <Link href="/admin" onClick={() => setOpen(false)}>Yönetim merkezi</Link>
+                ) : (
+                  <>
+                    <Link href="/profile" onClick={() => setOpen(false)}>Profili düzenle</Link>
+                    <Link href="/plans" onClick={() => setOpen(false)}>Programlarım</Link>
+                    <Link href="/pricing" onClick={() => setOpen(false)}>Üyeliğim: {accountLabel(false, membershipTier)}</Link>
+                  </>
+                )}
+                <button type="button" onClick={logout} disabled={loading}>{loading ? "Çıkılıyor…" : "Çıkış yap"}</button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>
