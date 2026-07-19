@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
+import { PlanExportCenter } from "@/components/plans/PlanExportCenter";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function PlansLayout({ children }: { children: ReactNode }) {
@@ -17,5 +18,10 @@ export default async function PlansLayout({ children }: { children: ReactNode })
 
   if (profile?.role === "admin") redirect("/admin");
 
-  return children;
+  return (
+    <>
+      <PlanExportCenter />
+      {children}
+    </>
+  );
 }
