@@ -54,10 +54,7 @@ export function AppNav() {
 
         <nav className="app-nav-links" aria-label="Ana menü">
           {isAdmin ? (
-            <>
-              <Link href="/admin" className={pathname.startsWith("/admin") ? "active" : ""}>Yönetim merkezi</Link>
-              <Link href="/" className={pathname === "/" ? "active" : ""}>Siteyi görüntüle</Link>
-            </>
+            <Link href="/admin" className={pathname.startsWith("/admin") ? "active" : ""}>Yönetim merkezi</Link>
           ) : (
             <>
               <Link href="/#features">Özellikler</Link>
@@ -80,10 +77,7 @@ export function AppNav() {
           {open && (
             <div className="account-menu">
               {isAdmin ? (
-                <>
-                  <Link href="/admin" onClick={() => setOpen(false)}>Yönetim merkezi</Link>
-                  <Link href="/" onClick={() => setOpen(false)}>Siteyi görüntüle</Link>
-                </>
+                <Link href="/admin" onClick={() => setOpen(false)}>Yönetim merkezi</Link>
               ) : (
                 <>
                   <Link href="/profile" onClick={() => setOpen(false)}>Profili düzenle</Link>
