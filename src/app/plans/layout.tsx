@@ -20,8 +20,9 @@ export default async function PlansLayout({ children }: { children: ReactNode })
 
   return (
     <>
-      <PlanExportCenter />
       {children}
+      <PlanExportCenter />
+      <div className="h-12" />
     </>
   );
 }
