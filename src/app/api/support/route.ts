@@ -2,6 +2,24 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+function supportError(error: { code?: string | null; message: string }) {
+  const missingTable =
+    error.code === "PGRST205" ||
+    error.code === "42P01" ||
+    error.message.toLowerCase().includes("does not exist") ||
+    error.message.toLowerCase().includes("could not find the table");
+
+  return NextResponse.json(
+    {
+      error: missingTable
+        ? "Canlı destek tabloları henüz kurulmamış. Supabase SQL Editor'da supabase/migrations/20260720_support_chat.sql dosyasını çalıştırın."
+        : error.message,
+      code: error.code ?? null,
+    },
+    { status: missingTable ? 503 : 500 },
+  );
+}
+
 async function currentUser() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -22,27 +40,31 @@ export async function GET(request: Request) {
       const { data: threads, error } = await admin.from("support_threads")
         .select("id,user_id,status,updated_at,created_at,profiles:user_id(full_name)")
         .order("updated_at", { ascending: false });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) return supportError(error);
       return NextResponse.json({ threads: threads ?? [] });
     }
     const { data: messages, error } = await admin.from("support_messages")
       .select("id,thread_id,sender_id,sender_role,body,read_at,created_at")
       .eq("thread_id", threadId).order("created_at", { ascending: true });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return supportError(error);
     await admin.from("support_messages").update({ read_at: new Date().toISOString() }).eq("thread_id", threadId).eq("sender_role", "user").is("read_at", null);
     return NextResponse.json({ messages: messages ?? [] });
   }
 
-  let { data: thread } = await admin.from("support_threads").select("id,status,updated_at").eq("user_id", auth.user.id).maybeSingle();
+  const threadResult = await admin.from("support_threads").select("id,status,updated_at").eq("user_id", auth.user.id).maybeSingle();
+  if (threadResult.error) return supportError(threadResult.error);
+
+  let thread = threadResult.data;
   if (!thread) {
     const created = await admin.from("support_threads").insert({ user_id: auth.user.id }).select("id,status,updated_at").single();
-    if (created.error) return NextResponse.json({ error: created.error.message }, { status: 500 });
+    if (created.error) return supportError(created.error);
     thread = created.data;
   }
+
   const { data: messages, error } = await admin.from("support_messages")
     .select("id,thread_id,sender_id,sender_role,body,read_at,created_at")
     .eq("thread_id", thread.id).order("created_at", { ascending: true });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return supportError(error);
   await admin.from("support_messages").update({ read_at: new Date().toISOString() }).eq("thread_id", thread.id).eq("sender_role", "admin").is("read_at", null);
   return NextResponse.json({ thread, messages: messages ?? [] });
 }
@@ -59,14 +81,17 @@ export async function POST(request: Request) {
   let receiverId = "";
   if (auth.role === "admin") {
     if (!threadId) return NextResponse.json({ error: "Konuşma seçilmedi." }, { status: 400 });
-    const { data: thread } = await admin.from("support_threads").select("user_id").eq("id", threadId).single();
+    const { data: thread, error: threadError } = await admin.from("support_threads").select("user_id").eq("id", threadId).single();
+    if (threadError) return supportError(threadError);
     if (!thread) return NextResponse.json({ error: "Konuşma bulunamadı." }, { status: 404 });
     receiverId = thread.user_id;
   } else {
-    let { data: thread } = await admin.from("support_threads").select("id").eq("user_id", auth.user.id).maybeSingle();
+    const threadResult = await admin.from("support_threads").select("id").eq("user_id", auth.user.id).maybeSingle();
+    if (threadResult.error) return supportError(threadResult.error);
+    let thread = threadResult.data;
     if (!thread) {
       const created = await admin.from("support_threads").insert({ user_id: auth.user.id }).select("id").single();
-      if (created.error) return NextResponse.json({ error: created.error.message }, { status: 500 });
+      if (created.error) return supportError(created.error);
       thread = created.data;
     }
     threadId = thread.id;
@@ -75,15 +100,15 @@ export async function POST(request: Request) {
   const { data: message, error } = await admin.from("support_messages").insert({
     thread_id: threadId, sender_id: auth.user.id, sender_role: auth.role, body: text,
   }).select("id,thread_id,sender_id,sender_role,body,read_at,created_at").single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return supportError(error);
   await admin.from("support_threads").update({ updated_at: new Date().toISOString(), status: "open" }).eq("id", threadId);
 
   if (auth.role === "admin" && receiverId) {
     await admin.from("notifications").insert({
       user_id: receiverId,
       title: "Yeni destek mesajın var",
-      body: text.slice(0, 180),
-      type: "message",
+      message: text.slice(0, 180),
+      kind: "message",
       href: "/support",
     });
   }
