@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+type SupportPostBody = {
+  message?: unknown;
+  threadId?: unknown;
+  mode?: unknown;
+};
+
 function supportError(error: { code?: string | null; message: string }) {
   const missingTable =
     error.code === "PGRST205" ||
@@ -28,6 +34,26 @@ async function currentUser() {
   return { user, role: profile?.role === "admin" ? "admin" : "user", fullName: profile?.full_name || user.email || "Kullanıcı" } as const;
 }
 
+async function getOrCreateThread(userId: string) {
+  const admin = createAdminClient();
+  const threadResult = await admin
+    .from("support_threads")
+    .select("id,status,updated_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (threadResult.error) return { thread: null, error: threadResult.error };
+  if (threadResult.data) return { thread: threadResult.data, error: null };
+
+  const created = await admin
+    .from("support_threads")
+    .insert({ user_id: userId })
+    .select("id,status,updated_at")
+    .single();
+
+  return { thread: created.data ?? null, error: created.error };
+}
+
 export async function GET(request: Request) {
   const auth = await currentUser();
   if (!auth) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
@@ -38,10 +64,30 @@ export async function GET(request: Request) {
     const threadId = url.searchParams.get("threadId");
     if (!threadId) {
       const { data: threads, error } = await admin.from("support_threads")
-        .select("id,user_id,status,updated_at,created_at,profiles:user_id(full_name)")
+        .select("id,user_id,status,updated_at,created_at")
         .order("updated_at", { ascending: false });
       if (error) return supportError(error);
-      return NextResponse.json({ threads: threads ?? [] });
+
+      const userIds = Array.from(new Set((threads ?? []).map((thread) => thread.user_id)));
+      const { data: profiles, error: profilesError } = userIds.length
+        ? await admin.from("profiles").select("id,full_name").in("id", userIds)
+        : { data: [], error: null };
+
+      if (profilesError) return supportError(profilesError);
+
+      const profilesById = new Map(
+        (profiles ?? []).map((profile) => [
+          profile.id,
+          { full_name: profile.full_name },
+        ]),
+      );
+
+      return NextResponse.json({
+        threads: (threads ?? []).map((thread) => ({
+          ...thread,
+          profiles: profilesById.get(thread.user_id) ?? null,
+        })),
+      });
     }
     const { data: messages, error } = await admin.from("support_messages")
       .select("id,thread_id,sender_id,sender_role,body,read_at,created_at")
@@ -73,12 +119,35 @@ export async function POST(request: Request) {
   const auth = await currentUser();
   if (!auth) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
   const admin = createAdminClient();
-  const body = await request.json().catch(() => ({}));
+  const body = (await request.json().catch(() => ({}))) as SupportPostBody;
   const text = String(body.message ?? "").trim().slice(0, 4000);
   if (!text) return NextResponse.json({ error: "Mesaj boş olamaz." }, { status: 400 });
 
   let threadId = String(body.threadId ?? "");
   let receiverId = "";
+
+  if (auth.role === "admin" && body.mode === "test-user-message") {
+    const { thread, error: threadError } = await getOrCreateThread(auth.user.id);
+    if (threadError) return supportError(threadError);
+    if (!thread) return NextResponse.json({ error: "Test konuşması oluşturulamadı." }, { status: 500 });
+
+    const { data: message, error } = await admin.from("support_messages").insert({
+      thread_id: thread.id,
+      sender_id: auth.user.id,
+      sender_role: "user",
+      body: text,
+    }).select("id,thread_id,sender_id,sender_role,body,read_at,created_at").single();
+
+    if (error) return supportError(error);
+
+    await admin
+      .from("support_threads")
+      .update({ updated_at: new Date().toISOString(), status: "open" })
+      .eq("id", thread.id);
+
+    return NextResponse.json({ message, thread, testMode: true }, { status: 201 });
+  }
+
   if (auth.role === "admin") {
     if (!threadId) return NextResponse.json({ error: "Konuşma seçilmedi." }, { status: 400 });
     const { data: thread, error: threadError } = await admin.from("support_threads").select("user_id").eq("id", threadId).single();
