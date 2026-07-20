@@ -1,9 +1,7 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { sendSignupConfirmationEmail } from "@/lib/auth-email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthErrorMessage } from "@/lib/supabase/auth-errors";
 
@@ -11,17 +9,51 @@ function encodeMessage(message: string) {
   return encodeURIComponent(message);
 }
 
-async function getSiteOrigin() {
-  const requestHeaders = await headers();
-  const forwardedHost = requestHeaders.get("x-forwarded-host");
-  const host = forwardedHost ?? requestHeaders.get("host");
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? "http";
-
+function isAlreadyRegisteredError(error: Error) {
+  const message = error.message.toLowerCase();
   return (
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
-    requestHeaders.get("origin") ||
-    (host ? `${protocol}://${host}` : "http://localhost:3000")
+    message.includes("already registered") ||
+    message.includes("already exists") ||
+    message.includes("already been registered") ||
+    message.includes("user already")
   );
+}
+
+async function findUserByEmail(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+) {
+  const perPage = 200;
+
+  for (let page = 1; page <= 10; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+
+    if (error) throw error;
+
+    const user = data.users.find(
+      (item) => item.email?.toLowerCase() === email,
+    );
+
+    if (user) return user;
+    if (data.users.length < perPage) return null;
+  }
+
+  return null;
+}
+
+async function upsertProfile(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  fullName: string,
+) {
+  const { error } = await admin
+    .from("profiles")
+    .upsert({ id: userId, full_name: fullName }, { onConflict: "id" });
+
+  if (error) throw error;
 }
 
 export async function register(formData: FormData) {
@@ -29,6 +61,8 @@ export async function register(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const passwordConfirm = String(formData.get("passwordConfirm") ?? "");
+  let successMessage =
+    "Hesabın oluşturuldu. Şimdi e-posta ve şifrenle giriş yapabilirsin.";
 
   if (!name || !email || !password || !passwordConfirm) {
     redirect(`/register?error=${encodeMessage("Tüm alanları doldur.")}`);
@@ -44,33 +78,47 @@ export async function register(formData: FormData) {
 
   try {
     const admin = createAdminClient();
-    const { data, error } = await admin.auth.admin.generateLink({
-      type: "signup",
+
+    const { data, error } = await admin.auth.admin.createUser({
       email,
       password,
-      options: {
-        data: { full_name: name },
-      },
+      email_confirm: true,
+      user_metadata: { full_name: name },
     });
 
-    if (error) throw error;
+    if (error) {
+      if (!isAlreadyRegisteredError(error)) throw error;
 
-    const tokenHash = data.properties?.hashed_token;
-    if (!tokenHash) {
-      throw new Error("Doğrulama anahtarı üretilemedi.");
+      const existingUser = await findUserByEmail(admin, email);
+
+      if (!existingUser) throw error;
+
+      if (existingUser.email_confirmed_at) {
+        successMessage =
+          "Bu e-posta zaten kayıtlı. Şifrenle giriş yapabilirsin.";
+      } else {
+        const { error: updateError } = await admin.auth.admin.updateUserById(
+          existingUser.id,
+          {
+            password,
+            email_confirm: true,
+            user_metadata: {
+              ...existingUser.user_metadata,
+              full_name: name,
+            },
+          },
+        );
+
+        if (updateError) throw updateError;
+        await upsertProfile(admin, existingUser.id, name);
+        successMessage =
+          "Hesabın doğrulandı. Şimdi e-posta ve şifrenle giriş yapabilirsin.";
+      }
+    } else if (data.user) {
+      await upsertProfile(admin, data.user.id, name);
+    } else {
+      throw new Error("Kullanıcı oluşturulamadı.");
     }
-
-    const origin = await getSiteOrigin();
-    const confirmationUrl = new URL("/auth/callback", origin);
-    confirmationUrl.searchParams.set("token_hash", tokenHash);
-    confirmationUrl.searchParams.set("type", "email");
-    confirmationUrl.searchParams.set("next", "/onboarding");
-
-    await sendSignupConfirmationEmail({
-      email,
-      fullName: name,
-      confirmationUrl: confirmationUrl.toString(),
-    });
   } catch (error) {
     console.error("Register error:", error);
     redirect(
@@ -83,9 +131,5 @@ export async function register(formData: FormData) {
     );
   }
 
-  redirect(
-    `/login?message=${encodeMessage(
-      "Hesabın oluşturuldu. E-postandaki doğrulama bağlantısına tıkla.",
-    )}`,
-  );
+  redirect(`/login?message=${encodeMessage(successMessage)}`);
 }

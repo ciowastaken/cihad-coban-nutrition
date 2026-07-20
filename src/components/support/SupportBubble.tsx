@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const INACTIVITY_WARNING_MS = 3 * 60 * 1000;
@@ -18,6 +19,13 @@ type Message = {
 };
 
 export function SupportBubble() {
+  const pathname = usePathname();
+  const hideOnAuthPage =
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
+    pathname.startsWith("/auth/");
   const [ready, setReady] = useState(false);
   const [visible, setVisible] = useState(false);
   const [open, setOpen] = useState(false);
@@ -83,6 +91,8 @@ export function SupportBubble() {
   }, [startInactivityTimer]);
 
   useEffect(() => {
+    if (hideOnAuthPage) return;
+
     let active = true;
 
     async function checkSession() {
@@ -108,10 +118,10 @@ export function SupportBubble() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [hideOnAuthPage]);
 
   useEffect(() => {
-    if (!visible || !open) return;
+    if (hideOnAuthPage || !visible || !open) return;
 
     let active = true;
 
@@ -143,17 +153,17 @@ export function SupportBubble() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [visible, open]);
+  }, [hideOnAuthPage, visible, open]);
 
   useEffect(() => {
-    if (!visible || !open) {
+    if (hideOnAuthPage || !visible || !open) {
       clearInactivityTimers();
       return;
     }
 
     startInactivityTimer();
     return clearInactivityTimers;
-  }, [clearInactivityTimers, open, startInactivityTimer, visible]);
+  }, [clearInactivityTimers, hideOnAuthPage, open, startInactivityTimer, visible]);
 
   useEffect(() => {
     if (!open || !shouldAutoScrollRef.current) return;
@@ -198,7 +208,7 @@ export function SupportBubble() {
     setText("");
   }
 
-  if (!ready || !visible) return null;
+  if (hideOnAuthPage || !ready || !visible) return null;
 
   return (
     <div className="support-bubble-root">
