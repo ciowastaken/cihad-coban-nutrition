@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { SiteFooter } from "@/components/layout/SiteFooter";
+import { SupportBubble } from "@/components/support/SupportBubble";
 
 import "./globals.css";
 import "./motion.css";
@@ -27,6 +28,7 @@ export default function RootLayout({
           <div className="flex-1 page-enter">{children}</div>
           <SiteFooter />
         </div>
+        <SupportBubble />
       </body>
     </html>
   );
