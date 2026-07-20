@@ -22,7 +22,12 @@ export function SupportBubble() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+
+  function isNearBottom(element: HTMLDivElement) {
+    return element.scrollHeight - element.scrollTop - element.clientHeight < 96;
+  }
 
   useEffect(() => {
     let active = true;
@@ -88,7 +93,15 @@ export function SupportBubble() {
   }, [visible, open]);
 
   useEffect(() => {
-    if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!open || !shouldAutoScrollRef.current) return;
+
+    const messagesElement = messagesRef.current;
+    if (!messagesElement) return;
+
+    messagesElement.scrollTo({
+      top: messagesElement.scrollHeight,
+      behavior: "auto",
+    });
   }, [messages, open]);
 
   async function sendMessage() {
@@ -115,6 +128,7 @@ export function SupportBubble() {
 
     const data = await response.json().catch(() => ({}));
     if (data.message) {
+      shouldAutoScrollRef.current = true;
       setMessages((current) => [...current, data.message]);
     }
     setText("");
@@ -134,7 +148,13 @@ export function SupportBubble() {
             <button type="button" onClick={() => setOpen(false)} aria-label="Canlı desteği kapat">×</button>
           </header>
 
-          <div className="support-bubble-messages">
+          <div
+            className="support-bubble-messages"
+            ref={messagesRef}
+            onScroll={(event) => {
+              shouldAutoScrollRef.current = isNearBottom(event.currentTarget);
+            }}
+          >
             {messages.length === 0 && !error && (
               <div className="support-bubble-welcome">
                 <span>👋</span>
@@ -154,7 +174,6 @@ export function SupportBubble() {
             ))}
 
             {error && <div className="support-bubble-error">{error}</div>}
-            <div ref={bottomRef} />
           </div>
 
           <div className="support-bubble-composer">
@@ -185,7 +204,10 @@ export function SupportBubble() {
       <button
         type="button"
         className="support-bubble-button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          shouldAutoScrollRef.current = true;
+          setOpen((value) => !value);
+        }}
         aria-label="Canlı desteği aç"
       >
         {open ? "×" : "💬"}

@@ -30,7 +30,12 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+
+  function isNearBottom(element: HTMLDivElement) {
+    return element.scrollHeight - element.scrollTop - element.clientHeight < 96;
+  }
 
   const loadThreads = useCallback(async () => {
     if (!admin) return;
@@ -121,7 +126,15 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
   }, [admin, loadMessages, loadThreads]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!shouldAutoScrollRef.current) return;
+
+    const messagesElement = messagesRef.current;
+    if (!messagesElement) return;
+
+    messagesElement.scrollTo({
+      top: messagesElement.scrollHeight,
+      behavior: "auto",
+    });
   }, [messages]);
 
   async function createTestConversation() {
@@ -152,6 +165,7 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
     };
 
     if (data.message) {
+      shouldAutoScrollRef.current = true;
       setThreadId(data.message.thread_id);
       setMessages([data.message]);
     }
@@ -187,6 +201,7 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
     }
 
     setText("");
+    shouldAutoScrollRef.current = true;
     await loadMessages();
     if (admin) await loadThreads();
   }
@@ -218,7 +233,10 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
               key={thread.id}
               type="button"
               className={threadId === thread.id ? "active" : ""}
-              onClick={() => setThreadId(thread.id)}
+              onClick={() => {
+                shouldAutoScrollRef.current = true;
+                setThreadId(thread.id);
+              }}
             >
               <b>{thread.profiles?.full_name || "Kullanıcı"}</b>
               <small>{new Date(thread.updated_at).toLocaleString("tr-TR")}</small>
@@ -248,7 +266,13 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
 
         {error && <div className="support-error">{error}</div>}
 
-        <div className="support-messages">
+        <div
+          className="support-messages"
+          ref={messagesRef}
+          onScroll={(event) => {
+            shouldAutoScrollRef.current = isNearBottom(event.currentTarget);
+          }}
+        >
           {messages.map((message) => (
             <div
               key={message.id}
@@ -273,7 +297,6 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
                 : "Mesaj yazarak konuşmayı başlat."}
             </div>
           )}
-          <div ref={bottomRef} />
         </div>
 
         <div className="support-composer">
