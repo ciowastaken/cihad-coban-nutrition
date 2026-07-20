@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+const INACTIVITY_WARNING_MS = 3 * 60 * 1000;
+const INACTIVITY_CLOSE_MS = 60 * 1000;
 
 type RoleResponse = {
   authenticated?: boolean;
@@ -22,12 +25,62 @@ export function SupportBubble() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [inactivityWarning, setInactivityWarning] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  const warningTimerRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
 
   function isNearBottom(element: HTMLDivElement) {
     return element.scrollHeight - element.scrollTop - element.clientHeight < 96;
   }
+
+  const clearInactivityTimers = useCallback(() => {
+    if (warningTimerRef.current !== null) {
+      window.clearTimeout(warningTimerRef.current);
+      warningTimerRef.current = null;
+    }
+
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  const closeInactiveConversation = useCallback(async () => {
+    clearInactivityTimers();
+    setInactivityWarning(false);
+    setOpen(false);
+    setMessages([]);
+    setText("");
+    setError("");
+    shouldAutoScrollRef.current = true;
+
+    await fetch("/api/support", {
+      method: "DELETE",
+      credentials: "same-origin",
+    }).catch(() => null);
+  }, [clearInactivityTimers]);
+
+  const startInactivityTimer = useCallback(() => {
+    clearInactivityTimers();
+
+    if (!visible || !open) return;
+
+    warningTimerRef.current = window.setTimeout(() => {
+      setInactivityWarning(true);
+      shouldAutoScrollRef.current = true;
+
+      closeTimerRef.current = window.setTimeout(() => {
+        void closeInactiveConversation();
+      }, INACTIVITY_CLOSE_MS);
+    }, INACTIVITY_WARNING_MS);
+  }, [clearInactivityTimers, closeInactiveConversation, open, visible]);
+
+  const resetInactivityTimer = useCallback(() => {
+    setInactivityWarning(false);
+    startInactivityTimer();
+  }, [startInactivityTimer]);
 
   useEffect(() => {
     let active = true;
@@ -93,6 +146,16 @@ export function SupportBubble() {
   }, [visible, open]);
 
   useEffect(() => {
+    if (!visible || !open) {
+      clearInactivityTimers();
+      return;
+    }
+
+    startInactivityTimer();
+    return clearInactivityTimers;
+  }, [clearInactivityTimers, open, startInactivityTimer, visible]);
+
+  useEffect(() => {
     if (!open || !shouldAutoScrollRef.current) return;
 
     const messagesElement = messagesRef.current;
@@ -108,6 +171,7 @@ export function SupportBubble() {
     const message = text.trim();
     if (!message || sending) return;
 
+    resetInactivityTimer();
     setSending(true);
     setError("");
 
@@ -176,10 +240,20 @@ export function SupportBubble() {
             {error && <div className="support-bubble-error">{error}</div>}
           </div>
 
+          {inactivityWarning && (
+            <div className="support-bubble-warning">
+              3 dakikadır mesaj yazmadın. Devam etmek için mesaj yaz; 1 dakika
+              içinde sohbet temizlenip kapanacak.
+            </div>
+          )}
+
           <div className="support-bubble-composer">
             <textarea
               value={text}
-              onChange={(event) => setText(event.target.value)}
+              onChange={(event) => {
+                setText(event.target.value);
+                resetInactivityTimer();
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
@@ -206,6 +280,7 @@ export function SupportBubble() {
         className="support-bubble-button"
         onClick={() => {
           shouldAutoScrollRef.current = true;
+          setInactivityWarning(false);
           setOpen((value) => !value);
         }}
         aria-label="Canlı desteği aç"

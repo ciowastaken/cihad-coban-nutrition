@@ -184,3 +184,34 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ message }, { status: 201 });
 }
+
+export async function DELETE() {
+  const auth = await currentUser();
+  if (!auth) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
+
+  if (auth.role === "admin") {
+    return NextResponse.json(
+      { error: "Admin konuşmaları kullanıcı adına kapatamaz." },
+      { status: 403 },
+    );
+  }
+
+  const admin = createAdminClient();
+  const { data: thread, error: threadError } = await admin
+    .from("support_threads")
+    .select("id")
+    .eq("user_id", auth.user.id)
+    .maybeSingle();
+
+  if (threadError) return supportError(threadError);
+  if (!thread) return NextResponse.json({ closed: true });
+
+  const { error } = await admin
+    .from("support_threads")
+    .delete()
+    .eq("id", thread.id)
+    .eq("user_id", auth.user.id);
+
+  if (error) return supportError(error);
+  return NextResponse.json({ closed: true });
+}
