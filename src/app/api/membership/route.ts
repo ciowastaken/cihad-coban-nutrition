@@ -38,24 +38,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Geçersiz üyelik paketi." }, { status: 400 });
   }
 
-  const admin = createAdminClient();
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileError) return NextResponse.json({ error: profileError.message }, { status: 500 });
-  if (profile?.role === "admin") {
-    return NextResponse.json({ error: "Admin hesaplarında üyelik paketi değiştirilemez." }, { status: 403 });
-  }
-
-  const { error } = await admin
-    .from("profiles")
-    .update({ membership_tier: body.tier })
-    .eq("id", user.id);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({ tier: body.tier });
+  return NextResponse.json(
+    { error: "Üyelik paketi ödeme tamamlanmadan değiştirilemez. Lütfen ödeme sayfasından devam et." },
+    { status: 402 },
+  );
 }

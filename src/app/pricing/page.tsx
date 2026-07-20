@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 
@@ -13,9 +14,8 @@ const plans: Array<{ id: Tier; name: string; price: number; description: string;
 ];
 
 export default function PricingPage() {
+  const router = useRouter();
   const [selected, setSelected] = useState<Tier>("standard");
-  const [message, setMessage] = useState("");
-  const [saving, setSaving] = useState<Tier | null>(null);
 
   useEffect(() => {
     fetch("/api/membership", { cache: "no-store", credentials: "include" })
@@ -23,15 +23,8 @@ export default function PricingPage() {
       .then((data: { tier?: Tier }) => setSelected(data.tier || "standard"));
   }, []);
 
-  async function choosePlan(tier: Tier) {
-    setSaving(tier); setMessage("");
-    const response = await fetch("/api/membership", { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ tier }) });
-    const data = await response.json().catch(() => ({}));
-    setSaving(null);
-    if (!response.ok) { setMessage(data.error || "Üyelik paketi güncellenemedi."); return; }
-    setSelected(tier);
-    setMessage(`${plans.find((plan) => plan.id === tier)?.name} üyeliği hesabına tanımlandı.`);
-    window.dispatchEvent(new Event("membership-changed"));
+  function choosePlan(tier: Tier) {
+    router.push(`/checkout?tier=${tier}`);
   }
 
   return (
@@ -41,9 +34,8 @@ export default function PricingPage() {
         <section className="mx-auto max-w-3xl text-center">
           <p className="eyebrow justify-center"><span /> Üyelik paketleri</p>
           <h1 className="mt-5 text-4xl font-semibold tracking-tight text-emerald-950 lg:text-6xl">Hangi pakette ne kullanacağını net gör.</h1>
-          <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">Paket izinleri hesabına kaydedilir. Standart kullanıcı PRO veya Klinik özelliklerini açamaz.</p>
+          <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">Paket yükseltmeleri ödeme tamamlandıktan sonra hesabına tanımlanır. Standart kullanıcı PRO veya Klinik özelliklerini ödeme yapmadan açamaz.</p>
         </section>
-        {message && <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center font-semibold text-emerald-900">{message}</div>}
         <section className="mt-12 grid gap-6 lg:grid-cols-3">
           {plans.map((plan) => {
             const active = selected === plan.id;
@@ -54,7 +46,7 @@ export default function PricingPage() {
                 <div className="mt-5 flex items-end gap-1"><b className="text-5xl">₺{plan.price}</b><span className={plan.popular ? "text-emerald-200" : "text-slate-500"}>/ay</span></div>
                 <p className={`mt-5 min-h-14 leading-6 ${plan.popular ? "text-emerald-100" : "text-slate-600"}`}>{plan.description}</p>
                 <ul className="mt-7 space-y-4">{plan.features.map((feature) => <li key={feature} className="flex gap-3"><span className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs ${plan.popular ? "bg-emerald-700" : "bg-emerald-100"}`}>✓</span><span>{feature}</span></li>)}</ul>
-                <button type="button" disabled={active || saving !== null} onClick={() => choosePlan(plan.id)} className={`mt-auto rounded-full px-5 py-4 font-bold transition disabled:cursor-not-allowed disabled:opacity-70 ${plan.popular ? "bg-emerald-200 text-emerald-950 hover:bg-white" : "border border-emerald-950 hover:bg-emerald-950 hover:text-white"}`}>{saving === plan.id ? "Kaydediliyor…" : active ? "Mevcut paket" : "Bu paketi seç"}</button>
+                <button type="button" disabled={active} onClick={() => choosePlan(plan.id)} className={`mt-auto rounded-full px-5 py-4 font-bold transition disabled:cursor-not-allowed disabled:opacity-70 ${plan.popular ? "bg-emerald-200 text-emerald-950 hover:bg-white" : "border border-emerald-950 hover:bg-emerald-950 hover:text-white"}`}>{active ? "Mevcut paket" : "Ödeme sayfasına geç"}</button>
               </article>
             );
           })}
