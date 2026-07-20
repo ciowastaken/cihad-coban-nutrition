@@ -6,6 +6,7 @@ import { SupportBubble } from "@/components/support/SupportBubble";
 
 import "./globals.css";
 import "./motion.css";
+import "./support-bubble.css";
 
 export const metadata: Metadata = {
   title: {
