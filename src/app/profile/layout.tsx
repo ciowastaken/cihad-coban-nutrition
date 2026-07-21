@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
+import { hasAdminPanelAccess } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function ProfileLayout({ children }: { children: ReactNode }) {
@@ -15,7 +16,7 @@ export default async function ProfileLayout({ children }: { children: ReactNode 
     .eq("id", user.id)
     .maybeSingle();
 
-  if (profile?.role === "admin") redirect("/admin");
+  if (hasAdminPanelAccess(profile?.role)) redirect("/admin");
 
   return children;
 }

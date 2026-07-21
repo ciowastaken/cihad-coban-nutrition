@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { hasAdminPanelAccess } from "@/lib/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -8,7 +9,7 @@ async function requireAdmin() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "Oturum gerekli." }, { status: 401 }) };
   const { data: me } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (me?.role !== "admin") return { error: NextResponse.json({ error: "Yetkisiz." }, { status: 403 }) };
+  if (!hasAdminPanelAccess(me?.role)) return { error: NextResponse.json({ error: "Yetkisiz." }, { status: 403 }) };
   return { error: null };
 }
 

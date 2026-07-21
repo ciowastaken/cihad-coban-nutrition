@@ -29,6 +29,8 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [deletingMessages, setDeletingMessages] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const [error, setError] = useState("");
   const messagesRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -94,7 +96,12 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
       thread?: Thread;
     };
 
-    setMessages(Array.isArray(data.messages) ? data.messages : []);
+    const nextMessages = Array.isArray(data.messages) ? data.messages : [];
+    setMessages(nextMessages);
+    if (admin) {
+      const messageIds = new Set(nextMessages.map((message) => message.id));
+      setSelectedMessageIds((current) => current.filter((id) => messageIds.has(id)));
+    }
     if (!admin && data.thread?.id) setThreadId(data.thread.id);
     setError("");
   }, [admin, threadId]);
@@ -166,6 +173,7 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
 
     if (data.message) {
       shouldAutoScrollRef.current = true;
+      setSelectedMessageIds([]);
       setThreadId(data.message.thread_id);
       setMessages([data.message]);
     }
@@ -206,6 +214,64 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
     if (admin) await loadThreads();
   }
 
+  function toggleMessageSelection(id: string) {
+    setSelectedMessageIds((current) =>
+      current.includes(id)
+        ? current.filter((messageId) => messageId !== id)
+        : [...current, id],
+    );
+  }
+
+  async function deleteMessages(mode: "single" | "selected" | "thread", messageId?: string) {
+    if (!admin || !threadId || deletingMessages) return;
+
+    const ids = mode === "single" && messageId ? [messageId] : selectedMessageIds;
+
+    if (mode !== "thread" && ids.length === 0) {
+      setError("Silmek için en az bir mesaj seç.");
+      return;
+    }
+
+    const confirmation =
+      mode === "thread"
+        ? "Bu konuşmadaki tüm mesajlar kalıcı olarak silinsin mi?"
+        : `${ids.length} mesaj kalıcı olarak silinsin mi?`;
+
+    if (!confirm(confirmation)) return;
+
+    setDeletingMessages(true);
+    setError("");
+
+    const response = await fetch("/api/support", {
+      method: "DELETE",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        mode === "thread"
+          ? { threadId, scope: "thread" }
+          : { threadId, messageIds: ids },
+      ),
+    }).catch(() => null);
+
+    setDeletingMessages(false);
+
+    if (!response?.ok) {
+      const data = (await response?.json().catch(() => ({}))) as ApiError;
+      setError(data.error || "Mesaj silinemedi.");
+      return;
+    }
+
+    shouldAutoScrollRef.current = false;
+    setSelectedMessageIds([]);
+    setMessages((current) =>
+      mode === "thread"
+        ? []
+        : current.filter((message) => !ids.includes(message.id)),
+    );
+    await loadMessages();
+    await loadThreads();
+  }
+
   const selectedThread = threads.find((thread) => thread.id === threadId);
   const canSend = !sending && text.trim().length > 0 && (!admin || Boolean(threadId));
 
@@ -235,6 +301,7 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
               className={threadId === thread.id ? "active" : ""}
               onClick={() => {
                 shouldAutoScrollRef.current = true;
+                setSelectedMessageIds([]);
                 setThreadId(thread.id);
               }}
             >
@@ -266,6 +333,31 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
 
         {error && <div className="support-error">{error}</div>}
 
+        {admin && threadId && messages.length > 0 && (
+          <div className="support-message-toolbar">
+            <span>
+              {selectedMessageIds.length > 0
+                ? `${selectedMessageIds.length} mesaj seçili`
+                : `${messages.length} mesaj`}
+            </span>
+            <button
+              type="button"
+              onClick={() => void deleteMessages("selected")}
+              disabled={deletingMessages || selectedMessageIds.length === 0}
+            >
+              Seçilenleri sil
+            </button>
+            <button
+              type="button"
+              className="danger"
+              onClick={() => void deleteMessages("thread")}
+              disabled={deletingMessages}
+            >
+              Tüm mesajları sil
+            </button>
+          </div>
+        )}
+
         <div
           className="support-messages"
           ref={messagesRef}
@@ -273,22 +365,47 @@ export function SupportChat({ admin = false }: { admin?: boolean }) {
             shouldAutoScrollRef.current = isNearBottom(event.currentTarget);
           }}
         >
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`support-message ${
-                message.sender_role === (admin ? "admin" : "user") ? "mine" : "theirs"
-              }`}
-            >
-              <p>{message.body}</p>
-              <small>
-                {new Date(message.created_at).toLocaleTimeString("tr-TR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </small>
-            </div>
-          ))}
+          {messages.map((message) => {
+            const mine = message.sender_role === (admin ? "admin" : "user");
+            const selected = selectedMessageIds.includes(message.id);
+
+            return (
+              <div
+                key={message.id}
+                className={`support-message-wrap ${mine ? "mine" : "theirs"}`}
+              >
+                {admin && (
+                  <div className="support-message-actions">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => toggleMessageSelection(message.id)}
+                        aria-label="Mesajı seç"
+                      />
+                      Seç
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void deleteMessages("single", message.id)}
+                      disabled={deletingMessages}
+                    >
+                      Sil
+                    </button>
+                  </div>
+                )}
+                <div className={`support-message ${mine ? "mine" : "theirs"}`}>
+                  <p>{message.body}</p>
+                  <small>
+                    {new Date(message.created_at).toLocaleTimeString("tr-TR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </small>
+                </div>
+              </div>
+            );
+          })}
 
           {!messages.length && (
             <div className="support-empty">

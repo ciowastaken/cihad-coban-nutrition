@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { hasAdminPanelAccess } from "@/lib/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -45,7 +46,7 @@ async function requireAdmin() {
     .eq("id", user.id)
     .single();
 
-  if (me?.role !== "admin") {
+  if (!hasAdminPanelAccess(me?.role)) {
     return { error: NextResponse.json({ error: "Yetkisiz." }, { status: 403 }) };
   }
 

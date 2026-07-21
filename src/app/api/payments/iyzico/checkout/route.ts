@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { hasAdminPanelAccess } from "@/lib/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { initializeIyzicoCheckout, getIyzicoConfig } from "@/lib/payments/iyzico";
@@ -45,8 +46,8 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (profileError) return NextResponse.json({ error: profileError.message }, { status: 500 });
-  if (profile?.role === "admin") {
-    return NextResponse.json({ error: "Admin hesaplarında ödeme ile üyelik paketi değiştirilemez." }, { status: 403 });
+  if (hasAdminPanelAccess(profile?.role)) {
+    return NextResponse.json({ error: "Panel yetkili hesaplarında ödeme ile üyelik paketi değiştirilemez." }, { status: 403 });
   }
   if (profile?.membership_tier === body.tier) {
     return NextResponse.json({ error: "Bu paket zaten hesabında aktif." }, { status: 409 });
@@ -82,4 +83,3 @@ export async function POST(request: Request) {
     token: result.token,
   });
 }
-

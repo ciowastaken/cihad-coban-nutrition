@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AppNav } from "@/components/layout/AppNav";
+import { normalizeRole, type UserRole } from "@/lib/roles";
 import { UserPlanManager } from "./UserPlanManager";
 import "./admin.css";
 
@@ -34,6 +35,16 @@ const statusLabels: Record<AppointmentStatus, string> = {
   cancelled: "İptal edildi",
   completed: "Tamamlandı",
 };
+const roleOptions: { value: UserRole; label: string; hint: string }[] = [
+  { value: "user", label: "Kullanıcı", hint: "Normal üye alanı" },
+  { value: "yetkili", label: "Yetkili", hint: "Admin panele giriş yapar" },
+  { value: "admin", label: "Admin", hint: "Rank ve kullanıcı yönetir" },
+];
+const roleLabels: Record<UserRole, string> = {
+  user: "Kullanıcı",
+  yetkili: "Yetkili",
+  admin: "Admin",
+};
 const slots = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
 
 export default function AdminPage() {
@@ -43,6 +54,9 @@ export default function AdminPage() {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
+  const [updatingRole, setUpdatingRole] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState("");
+  const [canManageRoles, setCanManageRoles] = useState(false);
   const [busyAppointment, setBusyAppointment] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | AppointmentStatus>("all");
@@ -65,13 +79,23 @@ export default function AdminPage() {
     const usersJson = await usersResponse.json().catch(() => ({}));
     const appointmentsJson = await appointmentsResponse.json().catch(() => ({}));
     if (!usersResponse.ok) setError(usersJson.error || "Admin verileri alınamadı.");
-    else setUsers(usersJson.users ?? []);
+    else {
+      setUsers(usersJson.users ?? []);
+      setCurrentUserId(usersJson.currentUserId ?? "");
+      setCanManageRoles(usersJson.canManageRoles === true);
+    }
     if (!appointmentsResponse.ok) setError((current) => current || appointmentsJson.error || "Randevular alınamadı.");
     else setAppointments(appointmentsJson.appointments ?? []);
     setLoading(false);
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   async function removeUser(id: string) {
     if (!confirm("Bu kullanıcı ve tüm verileri kalıcı olarak silinsin mi?")) return;
@@ -86,6 +110,44 @@ export default function AdminPage() {
 
   function updateUserPlans(userId: string, plans: Plan[]) {
     setUsers((current) => current.map((user) => user.id === userId ? { ...user, plans } : user));
+  }
+
+  async function updateUserRole(userId: string, role: UserRole) {
+    const label = roleLabels[role];
+    if (!confirm(`Bu kullanıcının rankı "${label}" olarak değiştirilsin mi?`)) return;
+
+    setUpdatingRole(userId);
+    setError("");
+    setNotice("");
+
+    const response = await fetch(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
+    const json = await response.json().catch(() => ({}));
+    setUpdatingRole(null);
+
+    if (!response.ok) {
+      setError(json.error || "Rank güncellenemedi.");
+      return;
+    }
+
+    const nextRole = normalizeRole(json.profile?.role ?? role);
+    setUsers((current) => current.map((user) => {
+      if (user.id !== userId) return user;
+
+      return {
+        ...user,
+        profile: {
+          full_name: user.profile?.full_name ?? "",
+          role: nextRole,
+          weight_kg: user.profile?.weight_kg ?? null,
+          target_weight_kg: user.profile?.target_weight_kg ?? null,
+        },
+      };
+    }));
+    setNotice(`Kullanıcı rankı ${roleLabels[nextRole]} olarak güncellendi.`);
   }
 
   function startEditing(appointment: Appointment) {
@@ -266,12 +328,31 @@ export default function AdminPage() {
         <section className="admin-section-block">
           <div className="section-title-row"><div><p className="eyebrow"><span /> Kullanıcı yönetimi</p><h2>Üyeler</h2></div><span>{users.length} kayıt</span></div>
           {loading ? <div className="empty-state">Panel yükleniyor…</div> : <div className="admin-grid">
-            {users.map((user) => <article className="admin-user-card" key={user.id}>
-              <div className="admin-user-top"><span className="admin-avatar">{(user.profile?.full_name || user.email).slice(0, 1).toUpperCase()}</span><div><h2>{user.profile?.full_name || "İsimsiz kullanıcı"}</h2><p>{user.email}</p></div><span className={`role-badge ${user.profile?.role}`}>{user.profile?.role || "user"}</span></div>
-              <div className="admin-meta"><div><small>Kayıt</small><b>{new Date(user.createdAt).toLocaleDateString("tr-TR")}</b></div><div><small>Kilo</small><b>{user.profile?.weight_kg ? `${user.profile.weight_kg} kg` : "—"}</b></div><div><small>Hedef</small><b>{user.profile?.target_weight_kg ? `${user.profile.target_weight_kg} kg` : "—"}</b></div></div>
-              <UserPlanManager userId={user.id} plans={user.plans} onChange={(plans) => updateUserPlans(user.id, plans)} onNotice={setNotice} onError={setError} />
-              {user.profile?.role !== "admin" && <button className="danger-button w-full" onClick={() => void removeUser(user.id)} disabled={deletingUser === user.id}>{deletingUser === user.id ? "Siliniyor…" : "Kullanıcıyı sistemden sil"}</button>}
-            </article>)}
+            {users.map((user) => {
+              const role = normalizeRole(user.profile?.role);
+              const isSelf = user.id === currentUserId;
+
+              return (
+                <article className="admin-user-card" key={user.id}>
+                  <div className="admin-user-top"><span className="admin-avatar">{(user.profile?.full_name || user.email).slice(0, 1).toUpperCase()}</span><div><h2>{user.profile?.full_name || "İsimsiz kullanıcı"}</h2><p>{user.email}</p></div><span className={`role-badge ${role}`}>{roleLabels[role]}</span></div>
+                  <div className="admin-meta"><div><small>Kayıt</small><b>{new Date(user.createdAt).toLocaleDateString("tr-TR")}</b></div><div><small>Kilo</small><b>{user.profile?.weight_kg ? `${user.profile.weight_kg} kg` : "—"}</b></div><div><small>Hedef</small><b>{user.profile?.target_weight_kg ? `${user.profile.target_weight_kg} kg` : "—"}</b></div></div>
+                  <div className="admin-role-editor">
+                    <div><b>Kullanıcı rankı</b><small>{roleOptions.find((option) => option.value === role)?.hint}</small>{isSelf && <small>Kendi rankını güvenlik için buradan değiştiremezsin.</small>}</div>
+                    <select
+                      value={role}
+                      onChange={(event) => void updateUserRole(user.id, event.target.value as UserRole)}
+                      disabled={!canManageRoles || isSelf || updatingRole === user.id}
+                    >
+                      {roleOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <UserPlanManager userId={user.id} plans={user.plans} onChange={(plans) => updateUserPlans(user.id, plans)} onNotice={setNotice} onError={setError} />
+                  {canManageRoles && !isSelf && role !== "admin" && <button className="danger-button w-full" onClick={() => void removeUser(user.id)} disabled={deletingUser === user.id}>{deletingUser === user.id ? "Siliniyor…" : "Kullanıcıyı sistemden sil"}</button>}
+                </article>
+              );
+            })}
           </div>}
         </section>
       </main>

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 
+import { hasAdminPanelAccess } from "@/lib/roles";
 import { getAuthErrorMessage } from "@/lib/supabase/auth-errors";
 import { createClient } from "@/lib/supabase/server";
 
@@ -36,5 +37,22 @@ export async function login(formData: FormData) {
   const safeNextPath = nextPath.startsWith("/") && !nextPath.startsWith("//")
     ? nextPath
     : "/dashboard";
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (hasAdminPanelAccess(profile?.role)) {
+      redirect(safeNextPath.startsWith("/admin") ? safeNextPath : "/admin");
+    }
+  }
+
   redirect(safeNextPath);
 }

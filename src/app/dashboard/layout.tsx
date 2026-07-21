@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
 import { AppNav } from "@/components/layout/AppNav";
+import { hasAdminPanelAccess } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardLayout({
@@ -26,7 +27,7 @@ export default async function DashboardLayout({
     .eq("id", user.id)
     .maybeSingle();
 
-  if (profile?.role === "admin") {
+  if (hasAdminPanelAccess(profile?.role)) {
     redirect("/admin");
   }
 

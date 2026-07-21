@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
 import { PlanExportCenter } from "@/components/plans/PlanExportCenter";
+import { hasAdminPanelAccess } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function PlansLayout({ children }: { children: ReactNode }) {
@@ -16,7 +17,7 @@ export default async function PlansLayout({ children }: { children: ReactNode })
     .eq("id", user.id)
     .maybeSingle();
 
-  if (profile?.role === "admin") redirect("/admin");
+  if (hasAdminPanelAccess(profile?.role)) redirect("/admin");
 
   return (
     <>

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hasAdminPanelAccess } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -22,8 +23,8 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role,membership_tier").eq("id", user.id).maybeSingle();
   const tier = profile?.membership_tier || "standard";
-  const isAdmin = profile?.role === "admin";
-  const monthlyLimit = tier === "clinic" || isAdmin ? null : tier === "pro" ? 20 : 2;
+  const hasPanelAccess = hasAdminPanelAccess(profile?.role);
+  const monthlyLimit = tier === "clinic" || hasPanelAccess ? null : tier === "pro" ? 20 : 2;
 
   if (monthlyLimit !== null) {
     const start = new Date();

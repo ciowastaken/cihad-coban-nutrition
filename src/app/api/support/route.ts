@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hasAdminPanelAccess } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -6,6 +7,13 @@ type SupportPostBody = {
   message?: unknown;
   threadId?: unknown;
   mode?: unknown;
+};
+
+type SupportDeleteBody = {
+  threadId?: unknown;
+  messageId?: unknown;
+  messageIds?: unknown;
+  scope?: unknown;
 };
 
 function supportError(error: { code?: string | null; message: string }) {
@@ -31,7 +39,20 @@ async function currentUser() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await supabase.from("profiles").select("role,full_name").eq("id", user.id).maybeSingle();
-  return { user, role: profile?.role === "admin" ? "admin" : "user", fullName: profile?.full_name || user.email || "Kullanıcı" } as const;
+  return { user, role: hasAdminPanelAccess(profile?.role) ? "admin" : "user", fullName: profile?.full_name || user.email || "Kullanıcı" } as const;
+}
+
+function collectMessageIds(body: SupportDeleteBody, url: URL) {
+  const values: unknown[] = [body.messageId, url.searchParams.get("messageId")];
+  const bodyIds = body.messageIds;
+  const queryIds = url.searchParams.get("messageIds");
+
+  if (Array.isArray(bodyIds)) values.push(...bodyIds);
+  else if (typeof bodyIds === "string") values.push(...bodyIds.split(","));
+
+  if (queryIds) values.push(...queryIds.split(","));
+
+  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
 }
 
 async function getOrCreateThread(userId: string) {
@@ -185,18 +206,60 @@ export async function POST(request: Request) {
   return NextResponse.json({ message }, { status: 201 });
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   const auth = await currentUser();
   if (!auth) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
+  const admin = createAdminClient();
 
   if (auth.role === "admin") {
-    return NextResponse.json(
-      { error: "Admin konuşmaları kullanıcı adına kapatamaz." },
-      { status: 403 },
-    );
+    const url = new URL(request.url);
+    const body = (await request.json().catch(() => ({}))) as SupportDeleteBody;
+    const threadId = String(body.threadId ?? url.searchParams.get("threadId") ?? "").trim();
+    const scope = String(body.scope ?? url.searchParams.get("scope") ?? "").trim();
+    const messageIds = collectMessageIds(body, url);
+
+    if (scope === "thread") {
+      if (!threadId) return NextResponse.json({ error: "Konuşma seçilmedi." }, { status: 400 });
+
+      const { error } = await admin
+        .from("support_messages")
+        .delete()
+        .eq("thread_id", threadId);
+
+      if (error) return supportError(error);
+
+      await admin
+        .from("support_threads")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", threadId);
+
+      return NextResponse.json({ deleted: true });
+    }
+
+    if (messageIds.length === 0) {
+      return NextResponse.json({ error: "Silinecek mesaj seçilmedi." }, { status: 400 });
+    }
+
+    let deleteQuery = admin
+      .from("support_messages")
+      .delete()
+      .in("id", messageIds);
+
+    if (threadId) deleteQuery = deleteQuery.eq("thread_id", threadId);
+
+    const { error } = await deleteQuery;
+    if (error) return supportError(error);
+
+    if (threadId) {
+      await admin
+        .from("support_threads")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", threadId);
+    }
+
+    return NextResponse.json({ deleted: true, count: messageIds.length });
   }
 
-  const admin = createAdminClient();
   const { data: thread, error: threadError } = await admin
     .from("support_threads")
     .select("id")

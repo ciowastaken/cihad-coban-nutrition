@@ -3,6 +3,8 @@
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { hasAdminPanelAccess } from "@/lib/roles";
+
 const INACTIVITY_WARNING_MS = 3 * 60 * 1000;
 const INACTIVITY_CLOSE_MS = 60 * 1000;
 
@@ -110,7 +112,7 @@ export function SupportBubble() {
       }
 
       const data = (await response.json().catch(() => ({}))) as RoleResponse;
-      setVisible(data.authenticated === true && data.role !== "admin");
+      setVisible(data.authenticated === true && !hasAdminPanelAccess(data.role));
       setReady(true);
     }
 
